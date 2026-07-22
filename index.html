@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buscador de Anterioridades — INAPI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;1,400&family=Roboto+Slab:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0..1" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:'Roboto',-apple-system,Arial,sans-serif;color:#373737;background:#fff}
+  .ms{font-family:'Material Symbols Outlined';font-weight:normal;font-style:normal;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;direction:ltr;font-feature-settings:'liga';-webkit-font-smoothing:antialiased;vertical-align:middle}
+  a{color:inherit}
+  button{font-family:inherit}
+
+  header{background:#092039;color:#fff;position:sticky;top:0;z-index:40}
+  .header-top{max-width:1140px;margin:0 auto;padding:0 24px;height:72px;display:flex;align-items:center;gap:36px}
+  .header-brand{text-decoration:none;display:inline-flex;align-items:center;gap:12px}
+  .header-brand img{height:52px;width:auto;display:block;border-radius:2px}
+  .header-brand span{font-size:13px;line-height:1.25;color:rgba(255,255,255,.85);font-weight:500}
+  nav.main-nav{display:flex;align-items:center;gap:32px;margin-left:auto;font-size:13px;font-weight:400;text-transform:uppercase;letter-spacing:.06em}
+  nav.main-nav a{color:#fff;text-decoration:none;padding:4px 0;border-bottom:3px solid transparent}
+  nav.main-nav a.active{border-bottom-color:#FFBE5C}
+  nav.main-nav a:hover{border-bottom-color:#FFBE5C}
+
+  .subnav{background:#F2F2F2;border-top:1px solid #E6E6E6;border-bottom:1px solid #E6E6E6}
+  .subnav-inner{max-width:1140px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:24px;justify-content:flex-end}
+  .site-search{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #808080;padding:0;flex:1;max-width:300px}
+  .site-search input{flex:1;border:none;padding:10px 14px;font-family:inherit;font-size:14px;outline:none}
+  .site-search button{background:none;border:none;padding:8px 12px;color:#666;cursor:pointer;display:flex;align-items:center}
+  .site-search button:hover{color:#111}
+  .acceso-btn{display:inline-flex;align-items:center;gap:8px;background:#0F69C4;color:#fff;text-decoration:none;padding:10px 16px;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
+  .acceso-btn:hover{background:#0051A8}
+
+  .breadcrumb{background:#fff;border-bottom:1px solid #E6E6E6}
+  .breadcrumb ol{max-width:1140px;margin:0 auto;padding:14px 24px;list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:14px;color:#666}
+  .breadcrumb a{color:#0F69C4;text-decoration:none}
+  .breadcrumb a:hover{text-decoration:underline}
+  .breadcrumb .sep{display:flex;align-items:center;color:#999}
+  .breadcrumb .current{color:#111;font-weight:700}
+
+  .page-title{padding:32px 24px}
+  .page-title-inner{max-width:1140px;margin:0 auto}
+  .page-title h1{font-family:'Roboto Slab',serif;font-size:31px;font-weight:500;margin:0;color:#111}
+  .page-title p{font-size:16px;color:#666;margin:8px 0 0;max-width:720px}
+
+  main{max-width:1140px;margin:0 auto;padding:32px 24px}
+
+  .accordion-btn{width:100%;padding:16px;background:#0F69C4;border:1px solid #0F69C4;color:#fff;font-size:14px;font-weight:700;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+  .accordion-body{padding:24px;background:#fff;border:1px solid #ccc;border-top:none}
+  .accordion-body h3{font-size:16px;font-weight:700;margin:0 0 16px;color:#111}
+  .accordion-body h3.spaced{margin-top:24px}
+  .accordion-body p{font-size:14px;line-height:1.6;color:#666;margin:0 0 16px}
+  .senales-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-bottom:24px}
+  .senales-grid h4{font-size:14px;font-weight:700;color:#0F69C4;margin:0 0 12px}
+  .senales-grid p{font-size:13px;line-height:1.6;color:#666;margin:0}
+  .niveles{display:flex;flex-direction:column;gap:12px}
+  .nivel-row{display:flex;align-items:center;gap:12px}
+  .dot{display:inline-block;width:12px;height:12px;border-radius:50%}
+  .nivel-pct{font-size:14px;font-weight:700;color:#111}
+  .nivel-desc{font-size:13px;color:#666}
+
+  .search-section{background:#fff;border:1px solid #ccc;border-radius:8px;padding:24px;margin-bottom:32px}
+  .search-grid{display:grid;grid-template-columns:1fr 280px auto;gap:16px;align-items:flex-end;margin-bottom:12px}
+  .field label{font-size:12px;font-weight:700;text-transform:uppercase;color:#666;display:block;margin-bottom:8px}
+  .field input[type=text]{width:100%;padding:12px;border:1px solid #ccc;font-size:14px;background:#fff}
+  .class-picker{position:relative}
+  .class-picker-btn{width:100%;padding:12px;border:1px solid #ccc;font-size:14px;background:#fff;text-align:left;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+  .class-dropdown{display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ccc;border-top:none;max-height:300px;overflow-y:auto;z-index:10;box-shadow:0 4px 6px rgba(0,0,0,.1)}
+  .class-dropdown.open{display:block}
+  .class-option{display:flex;align-items:center;padding:12px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:14px;gap:12px}
+  .class-option input{width:18px;height:18px;cursor:pointer;accent-color:#003B8D}
+  .class-option .id{font-weight:700;color:#111}
+  .class-option .name{color:#111;margin-left:8px}
+  .search-btn{padding:12px 32px;color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;min-width:120px;background:#0051A8}
+  .search-btn:disabled{opacity:.6;cursor:default}
+  .chips{display:none;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .chips.visible{display:flex}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:#E3F2FD;padding:6px 12px;border-radius:16px;font-size:12px;color:#0F69C4;border:1px solid #B3E5FC}
+  .chip button{background:none;border:none;cursor:pointer;color:#0F69C4;font-weight:700;padding:0;font-size:14px;line-height:1;margin-left:4px}
+
+  .disclaimer{font-size:13px;line-height:1.6;color:#666;margin:0 0 32px}
+
+  .results-wrap{display:none;margin-top:32px}
+  .results-wrap.visible{display:block}
+  .results-summary{font-size:13px;color:#666;margin:0 0 24px}
+  .result-card{background:#fff;border:1px solid #ccc;border-left:4px solid #ccc;padding:24px;margin-bottom:16px;border-radius:4px}
+  .result-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+  .result-name{font-size:16px;font-weight:700;color:#111;margin:0}
+  .result-meta{font-size:12px;color:#666;margin:8px 0 0}
+  .class-badge{display:none;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;margin-left:8px}
+  .class-badge.visible{display:inline-block}
+  .result-pct{font-size:28px;font-weight:700;margin:0}
+  .senal-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  .senal-label{font-size:11px;text-transform:uppercase;color:#666;font-weight:700;margin:0 0 8px}
+  .senal-bar{background:#f2f2f2;height:6px;border-radius:3px;overflow:hidden}
+  .senal-bar-fill{height:100%}
+  .senal-val{font-size:12px;font-weight:700;margin:4px 0 0;text-align:center}
+
+  .final-note{font-size:12px;line-height:1.6;color:#666;margin:32px 0 0;padding:24px;background:#f2f2f2;border-radius:4px}
+  .empty-state{text-align:center;padding:48px 24px;color:#666;font-size:14px}
+  .loading-state{text-align:center;padding:48px 24px;color:#666;font-size:14px}
+  .error-state{text-align:center;padding:24px;color:#D32F2F;font-size:14px;background:#FFE5E5;border-radius:4px}
+
+  footer{background:#092039;color:#fff}
+  .footer-top{max-width:1140px;margin:0 auto;padding:48px 24px;display:flex;flex-wrap:wrap;gap:48px}
+  .footer-col h4{margin:0 0 16px;font-size:16px;font-weight:700}
+  .footer-col ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;font-size:14px}
+  .footer-col ul.wide{gap:12px;line-height:1.4}
+  .footer-col a{color:rgba(255,255,255,.85);text-decoration:none}
+  .footer-col a:hover{color:#fff}
+  .footer-col li.with-icon{display:flex;gap:10px;color:rgba(255,255,255,.85)}
+  .footer-col li.with-icon .ms{font-size:18px;color:#7FB2E8;flex:0 0 auto}
+  .footer-bottom{background:#061526;padding:16px 24px}
+  .footer-bottom-inner{max-width:1140px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:20px;justify-content:space-between;font-size:13px;color:rgba(255,255,255,.7)}
+  .footer-bottom-inner nav{display:flex;flex-wrap:wrap;gap:20px}
+  .footer-bottom-inner a{color:rgba(255,255,255,.7);text-decoration:none}
+  .footer-updated{max-width:1140px;margin:8px auto 0;font-size:12px;color:rgba(255,255,255,.55)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <a href="#" class="header-brand">
+      <img src="uploads/inapi_logo.jpg" alt="INAPI — Ministerio de Economía, Fomento y Turismo, Gobierno de Chile">
+      <span>Instituto Nacional<br>de Propiedad Industrial</span>
+    </a>
+    <nav class="main-nav">
+      <a href="#">NOSOTROS</a>
+      <a href="#">CONOCE MÁS</a>
+      <a href="#" class="active">MARCAS</a>
+      <a href="#">PATENTES</a>
+      <a href="#">PCT</a>
+      <a href="#">SISTEMA DE MADRID</a>
+      <a href="#">SELLO DE ORIGEN</a>
+      <a href="#">APRENDE</a>
+      <a href="#">CONECTA</a>
+    </nav>
+  </div>
+  <nav class="subnav">
+    <div class="subnav-inner">
+      <div class="site-search">
+        <input type="text" placeholder="Buscar en el sitio">
+        <button type="button"><span class="ms">search</span></button>
+      </div>
+      <a href="#" class="acceso-btn">ACCESO</a>
+    </div>
+  </nav>
+</header>
+
+<nav class="breadcrumb" aria-label="Migas de pan">
+  <ol>
+    <li><a href="#">Inicio</a></li>
+    <li class="sep" aria-hidden="true"><span class="ms">chevron_right</span></li>
+    <li><a href="#">Marcas</a></li>
+    <li class="sep" aria-hidden="true"><span class="ms">chevron_right</span></li>
+    <li class="current" aria-current="page">Buscador de Anterioridades</li>
+  </ol>
+</nav>
+
+<div class="page-title">
+  <div class="page-title-inner">
+    <h1>Buscador de Anterioridades</h1>
+    <p>Compara una denominación con las marcas ya inscritas en Chile antes de presentar tu solicitud.</p>
+  </div>
+</div>
+
+<main>
+  <section style="margin-bottom:32px">
+    <button class="accordion-btn" id="accordionBtn">
+      ¿Cómo interpretar los resultados?
+      <span id="accordionChevron">▼</span>
+    </button>
+    <div class="accordion-body" id="accordionBody" style="display:none">
+      <h3>¿Qué significa el porcentaje?</h3>
+      <p>
+        Es un indicador de <strong>similitud denominativa</strong> entre la marca que escribiste y una marca ya inscrita: qué tan parecidos son los nombres, considerando su escritura y su sonido. <strong>No es una predicción</strong> de si tu marca será aceptada o rechazada: esa decisión depende del examen de fondo de INAPI y de otros factores (cobertura de productos o servicios, causales legales, etc.).
+      </p>
+
+      <h3 class="spaced">Las dos señales que se combinan</h3>
+      <div class="senales-grid">
+        <div>
+          <h4>Ortográfica</h4>
+          <p>Qué tan parecidas se ven las palabras escritas, letra por letra. Detecta variaciones de escritura y reordenamientos (ej. "Casa Blanca" / "Blanca Casa").</p>
+        </div>
+        <div>
+          <h4>Fonética</h4>
+          <p>Qué tan parecido suena el nombre al pronunciarlo en español de Chile. Detecta marcas que se escriben distinto pero suenan igual (ej. "Cauquenes" / "Kaukenes").</p>
+        </div>
+      </div>
+      <p>El porcentaje final combina ambas señales (58% ortográfica, 42% fonética), que son las que mejor reflejan el riesgo real de confusión entre marcas al leerlas o pronunciarlas.</p>
+
+      <h3 class="spaced">Niveles de similitud</h3>
+      <div class="niveles">
+        <div class="nivel-row">
+          <span class="dot" style="background:#D32F2F"></span>
+          <span class="nivel-pct">75% – 100%</span>
+          <span class="nivel-desc">Similitud alta. Conviene revisar con atención antes de presentar la solicitud.</span>
+        </div>
+        <div class="nivel-row">
+          <span class="dot" style="background:#FF9800"></span>
+          <span class="nivel-pct">50% – 74%</span>
+          <span class="nivel-desc">Similitud media. Hay parecido parcial: depende del contexto y la cobertura.</span>
+        </div>
+        <div class="nivel-row">
+          <span class="dot" style="background:#43A047"></span>
+          <span class="nivel-pct">0% – 49%</span>
+          <span class="nivel-desc">Similitud baja. Es poco probable que constituya un conflicto relevante.</span>
+        </div>
+      </div>
+
+      <h3 class="spaced">¿Qué es "clase relacionada"?</h3>
+      <p style="margin-bottom:0">Las marcas se inscriben en una o más <strong>clases de Niza</strong> (categorías de productos o servicios). Si indicas las clases de tu marca, el sistema destaca cuando una coincidencia comparte alguna de esas clases, porque el riesgo de confusión es mayor entre marcas que compiten en el mismo rubro. Si no indicas clases, esta distinción no se aplica.</p>
+    </div>
+  </section>
+
+  <section class="search-section">
+    <div class="search-grid">
+      <div class="field">
+        <label for="searchInput">Marca a evaluar</label>
+        <input type="text" id="searchInput" placeholder="Escribe el nombre de la marca">
+      </div>
+      <div class="field class-picker">
+        <label>Clases NCL (opcional)</label>
+        <button type="button" class="class-picker-btn" id="classPickerBtn">
+          <span id="classDropdownLabel">Todas las clases</span>
+          <span>▼</span>
+        </button>
+        <div class="class-dropdown" id="classDropdown"></div>
+      </div>
+      <button class="search-btn" id="searchBtn" disabled>Buscar</button>
+    </div>
+    <div class="chips" id="classChips"></div>
+  </section>
+
+  <p class="disclaimer">
+    El porcentaje refleja la <strong>similitud denominativa</strong> (ortográfica y fonética) con marcas ya inscritas. Es una orientación preliminar para el solicitante y <strong>no constituye una resolución</strong> ni una predicción sobre la registrabilidad de la marca, la cual queda sujeta al examen de fondo de INAPI.
+  </p>
+
+  <div class="results-wrap" id="resultsWrap">
+    <p class="results-summary" id="resultsSummary"></p>
+    <div id="resultsList"></div>
+    <p class="final-note">
+      El porcentaje refleja la <strong>similitud denominativa</strong> (ortográfica y fonética) con marcas ya inscritas. Es una orientación preliminar para el solicitante y <strong>no constituye una resolución</strong> ni una predicción sobre la registrabilidad de la marca, la cual queda sujeta al examen de fondo de INAPI.
+    </p>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-top">
+    <div class="footer-col" style="flex:1 1 300px;min-width:260px">
+      <img src="uploads/inapi_logo.jpg" alt="INAPI — Ministerio de Economía, Fomento y Turismo, Gobierno de Chile" style="height:84px;width:auto;display:block;border-radius:2px">
+      <p style="margin:18px 0 0;font-size:15px;line-height:1.5;color:#fff;font-weight:700">Instituto Nacional de Propiedad Industrial (INAPI)</p>
+      <p style="margin:6px 0 0;font-size:14px;line-height:1.6;color:rgba(255,255,255,.78);max-width:320px">Servicio público del Estado de Chile, dependiente del Ministerio de Economía, Fomento y Turismo.</p>
+    </div>
+    <div class="footer-col" style="flex:0 1 230px">
+      <h4>Dónde estamos</h4>
+      <ul class="wide">
+        <li class="with-icon"><span class="ms">location_on</span>Carabineros de Chile N° 195, Santiago</li>
+        <li class="with-icon"><span class="ms">call</span>+56 2 2887 0400</li>
+        <li class="with-icon"><span class="ms">mail</span><span>inapi<span>@</span>inapi.cl</span></li>
+        <li class="with-icon"><span class="ms">badge</span>RUT: 65.999.669-3</li>
+      </ul>
+    </div>
+    <div class="footer-col" style="flex:0 1 180px">
+      <h4>Conversemos</h4>
+      <ul>
+        <li><a href="#">Formulario de contacto</a></li>
+        <li><a href="#">Facebook de INAPI</a></li>
+        <li><a href="#">INAPI en X (Twitter)</a></li>
+        <li><a href="#">Instagram de INAPI</a></li>
+        <li><a href="#">LinkedIn de INAPI</a></li>
+      </ul>
+    </div>
+    <div class="footer-col" style="flex:0 1 200px">
+      <h4>Accesos</h4>
+      <ul>
+        <li><a href="#">Registrar una marca</a></li>
+        <li><a href="#">Chequeo de marcas</a></li>
+        <li><a href="#">Preguntas frecuentes</a></li>
+        <li><a href="#">Glosario de propiedad industrial</a></li>
+        <li><a href="#">Mapa del sitio</a></li>
+        <li><a href="#">Descarga de visualizadores</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div class="footer-bottom-inner">
+      <span>© 2026 INAPI · Gobierno de Chile. Contenido bajo licencia Creative Commons BY 4.0.</span>
+      <nav>
+        <a href="#">Mapa del sitio</a>
+        <a href="#">Accesibilidad</a>
+        <a href="#">Política de privacidad y derechos ARCO</a>
+      </nav>
+    </div>
+    <div class="footer-updated">Última actualización: 22-07-2026</div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var CLASS_NAMES = {
+    1: 'Productos químicos', 2: 'Pinturas y barnices', 3: 'Cosméticos y limpieza',
+    4: 'Aceites y combustibles', 5: 'Productos farmacéuticos', 6: 'Metales comunes',
+    7: 'Máquinas y herramientas mecánicas', 8: 'Herramientas manuales', 9: 'Aparatos científicos y electrónicos',
+    10: 'Aparatos médicos', 11: 'Alumbrado y climatización', 12: 'Vehículos',
+    13: 'Armas de fuego', 14: 'Joyería y relojería', 15: 'Instrumentos musicales',
+    16: 'Papelería e imprenta', 17: 'Caucho y plásticos semielaborados', 18: 'Cuero y artículos de viaje',
+    19: 'Materiales de construcción no metálicos', 20: 'Muebles', 21: 'Utensilios domésticos',
+    22: 'Cuerdas y lonas', 23: 'Hilos textiles', 24: 'Tejidos y ropa de hogar',
+    25: 'Vestuario y calzado', 26: 'Encajes y adornos', 27: 'Alfombras y revestimientos',
+    28: 'Juegos y artículos deportivos', 29: 'Carne, pescado y lácteos', 30: 'Café, pan y pastelería',
+    31: 'Productos agrícolas y animales vivos', 32: 'Cervezas y bebidas sin alcohol',
+    33: 'Bebidas alcohólicas (excepto cervezas)', 34: 'Tabaco y artículos para fumadores',
+    35: 'Publicidad y gestión de negocios', 36: 'Servicios financieros y seguros',
+    37: 'Construcción y reparación', 38: 'Telecomunicaciones', 39: 'Transporte y almacenaje',
+    40: 'Tratamiento de materiales', 41: 'Educación y entretenimiento', 42: 'Servicios científicos y tecnológicos',
+    43: 'Restauración y hospedaje', 44: 'Servicios médicos y de belleza', 45: 'Servicios jurídicos y de seguridad'
+  };
+
+  var state = {
+    selectedClasses: [],
+    classDropdownOpen: false
+  };
+
+  var el = {
+    searchInput: document.getElementById('searchInput'),
+    searchBtn: document.getElementById('searchBtn'),
+    classPickerBtn: document.getElementById('classPickerBtn'),
+    classDropdown: document.getElementById('classDropdown'),
+    classDropdownLabel: document.getElementById('classDropdownLabel'),
+    classChips: document.getElementById('classChips'),
+    accordionBtn: document.getElementById('accordionBtn'),
+    accordionBody: document.getElementById('accordionBody'),
+    accordionChevron: document.getElementById('accordionChevron'),
+    resultsWrap: document.getElementById('resultsWrap'),
+    resultsSummary: document.getElementById('resultsSummary'),
+    resultsList: document.getElementById('resultsList')
+  };
+
+  function colorFor(v) {
+    if (v >= 75) return '#D32F2F';
+    if (v >= 50) return '#FF9800';
+    return '#43A047';
+  }
+
+  function badgeColors(similarity) {
+    return similarity >= 75
+      ? { bg: '#FFE5E5', text: '#D32F2F' }
+      : { bg: '#FFF3E0', text: '#FF9800' };
+  }
+
+  function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  // --- Acordeón ---
+  el.accordionBtn.addEventListener('click', function () {
+    var open = el.accordionBody.style.display !== 'none';
+    el.accordionBody.style.display = open ? 'none' : 'block';
+    el.accordionChevron.textContent = open ? '▼' : '▲';
+  });
+
+  // --- Dropdown de clases NCL ---
+  function renderClassDropdown() {
+    var html = '';
+    Object.keys(CLASS_NAMES).forEach(function (id) {
+      var idNum = parseInt(id, 10);
+      var checked = state.selectedClasses.indexOf(idNum) !== -1;
+      html += '<label class="class-option">' +
+        '<input type="checkbox" data-class-id="' + idNum + '"' + (checked ? ' checked' : '') + '>' +
+        '<div><span class="id">' + idNum + '</span><span class="name">' + escapeHtml(CLASS_NAMES[id]) + '</span></div>' +
+        '</label>';
+    });
+    el.classDropdown.innerHTML = html;
+
+    el.classDropdown.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        var id = parseInt(cb.getAttribute('data-class-id'), 10);
+        toggleClass(id);
+      });
+    });
+  }
+
+  function toggleClass(id) {
+    var idx = state.selectedClasses.indexOf(id);
+    if (idx === -1) {
+      state.selectedClasses.push(id);
+    } else {
+      state.selectedClasses.splice(idx, 1);
+    }
+    renderClassDropdown();
+    renderChips();
+    updateClassLabel();
+  }
+
+  function removeClass(id) {
+    var idx = state.selectedClasses.indexOf(id);
+    if (idx !== -1) state.selectedClasses.splice(idx, 1);
+    renderClassDropdown();
+    renderChips();
+    updateClassLabel();
+  }
+
+  function updateClassLabel() {
+    el.classDropdownLabel.textContent = state.selectedClasses.length > 0
+      ? state.selectedClasses.length + ' clase(s)'
+      : 'Todas las clases';
+  }
+
+  function renderChips() {
+    if (state.selectedClasses.length === 0) {
+      el.classChips.classList.remove('visible');
+      el.classChips.innerHTML = '';
+      return;
+    }
+    el.classChips.classList.add('visible');
+    el.classChips.innerHTML = state.selectedClasses.map(function (id) {
+      return '<div class="chip"><span>' + id + ' · ' + escapeHtml(CLASS_NAMES[id]) + '</span>' +
+        '<button type="button" data-remove-class="' + id + '">×</button></div>';
+    }).join('');
+    el.classChips.querySelectorAll('button[data-remove-class]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        removeClass(parseInt(btn.getAttribute('data-remove-class'), 10));
+      });
+    });
+  }
+
+  el.classPickerBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    state.classDropdownOpen = !state.classDropdownOpen;
+    el.classDropdown.classList.toggle('open', state.classDropdownOpen);
+  });
+  document.addEventListener('click', function (e) {
+    if (!el.classDropdown.contains(e.target) && e.target !== el.classPickerBtn) {
+      state.classDropdownOpen = false;
+      el.classDropdown.classList.remove('open');
+    }
+  });
+
+  // --- Habilitar/deshabilitar boton buscar segun input ---
+  el.searchInput.addEventListener('input', function () {
+    el.searchBtn.disabled = el.searchInput.value.trim().length === 0;
+  });
+  el.searchInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !el.searchBtn.disabled) doSearch();
+  });
+  el.searchBtn.addEventListener('click', doSearch);
+
+  // --- Busqueda real contra la API ---
+  function doSearch() {
+    var consulta = el.searchInput.value.trim();
+    if (!consulta) return;
+
+    el.resultsWrap.classList.add('visible');
+    el.resultsSummary.textContent = '';
+    el.resultsList.innerHTML = '<div class="loading-state">Buscando anterioridades…</div>';
+
+    var params = new URLSearchParams();
+    params.set('q', consulta);
+    params.set('top', '1');
+    if (state.selectedClasses.length > 0) {
+      params.set('clases', state.selectedClasses.join(','));
+    }
+
+    fetch('/api/buscar?' + params.toString())
+      .then(function (resp) {
+        if (!resp.ok) {
+          return resp.json().catch(function () { return {}; }).then(function (body) {
+            throw new Error(body.error || ('Error HTTP ' + resp.status));
+          });
+        }
+        return resp.json();
+      })
+      .then(function (data) {
+        renderResults(data);
+      })
+      .catch(function (err) {
+        el.resultsList.innerHTML = '<div class="error-state">No se pudo completar la búsqueda: ' + escapeHtml(err.message) + '</div>';
+      });
+  }
+
+  function renderResults(data) {
+    var resultados = data.resultados || [];
+
+    if (resultados.length === 0) {
+      el.resultsSummary.textContent = 'Sin coincidencias relevantes para "' + data.consulta + '".';
+      el.resultsList.innerHTML = '<div class="empty-state">No se encontraron marcas similares a esta denominación.</div>';
+      return;
+    }
+
+    el.resultsSummary.textContent = 'Marca más similar a "' + data.consulta + '":';
+
+    el.resultsList.innerHTML = resultados.map(function (r) {
+      var pctColor = colorFor(r.similitud);
+      var ortColor = colorFor(r.desglose.ortografica);
+      var fonColor = colorFor(r.desglose.fonetica);
+      var badge = badgeColors(r.similitud);
+      var clasesDisplay = (r.clases || []).join(', ');
+      var badgeHtml = r.clase_relacionada
+        ? '<span class="class-badge visible" style="background:' + badge.bg + ';color:' + badge.text + '">clase relacionada</span>'
+        : '';
+
+      return (
+        '<div class="result-card" style="border-left-color:' + pctColor + '">' +
+          '<div class="result-head">' +
+            '<div>' +
+              '<h3 class="result-name">' + escapeHtml(r.nombre) + '</h3>' +
+              '<p class="result-meta">Clases: ' + escapeHtml(clasesDisplay) + badgeHtml + '</p>' +
+            '</div>' +
+            '<div style="text-align:right">' +
+              '<p class="result-pct" style="color:' + pctColor + '">' + r.similitud + '%</p>' +
+            '</div>' +
+          '</div>' +
+          '<div class="senal-grid">' +
+            '<div>' +
+              '<p class="senal-label">Ortográfica</p>' +
+              '<div class="senal-bar"><div class="senal-bar-fill" style="background:' + ortColor + ';width:' + r.desglose.ortografica + '%"></div></div>' +
+              '<p class="senal-val" style="color:' + ortColor + '">' + r.desglose.ortografica + '%</p>' +
+            '</div>' +
+            '<div>' +
+              '<p class="senal-label">Fonética</p>' +
+              '<div class="senal-bar"><div class="senal-bar-fill" style="background:' + fonColor + ';width:' + r.desglose.fonetica + '%"></div></div>' +
+              '<p class="senal-val" style="color:' + fonColor + '">' + r.desglose.fonetica + '%</p>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  // --- Inicializacion ---
+  renderClassDropdown();
+  renderChips();
+  updateClassLabel();
+})();
+</script>
+</body>
+</html>
