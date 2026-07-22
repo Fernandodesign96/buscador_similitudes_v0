@@ -1,3 +1,19 @@
+---
+title: Buscador de Anterioridades INAPI
+emoji: 🔍
+colorFrom: blue
+colorTo: red
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
+# Buscador de Anterioridades — INAPI
+
+Herramienta pública que permite a un solicitante de marca comparar su denominación propuesta con las marcas ya inscritas en Chile antes de presentar la solicitud.
+
+No es un predictor de aceptación o rechazo. Es una herramienta orientativa; la resolución final corresponde al examinador de INAPI.
+
 # Buscador de Anterioridades Denominativas — INAPI
 ## Estado del proyecto · Julio 2026 (actualizado 20 jul)
 
