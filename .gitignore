@@ -1,5 +1,15 @@
-data/* 
-!data/marcas_oponibles.parquet 
-__pycache__/ 
-*.pyc 
-.pytest_cache/ 
+data/*
+!data/marcas_oponibles.parquet
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Entornos locales (no subir a GitHub — se recrean tras clonar)
+.venv/
+venv/
+
+# Frontend: artefactos generados (las dependencias se instalan con bun install)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env*

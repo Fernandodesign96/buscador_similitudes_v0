@@ -10,7 +10,9 @@ Uso:
 from __future__ import annotations
 
 import logging
+import math
 import os
+import time
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
@@ -30,7 +32,40 @@ app = Flask(__name__, static_folder=None)
 
 logger.info("Cargando indice y motor (una sola vez al arrancar)...")
 _motor = MotorBusqueda(IndiceBusqueda())
+_inicio = time.time()
 logger.info("Buscador listo.")
+
+
+def _serializar_resultados(resultados):
+    return [
+        {
+            "nombre": r.nombre,
+            "clases": r.clases,
+            "similitud": r.score,
+            "desglose": {
+                "ortografica": r.score_ortografico,
+                "fonetica": r.score_fonetico,
+            },
+            "clase_relacionada": r.clase_relacionada,
+        }
+        for r in resultados
+    ]
+
+
+def _filtrar_por_clases_estricto(resultados, clases: list[int]):
+    """Opcion B: solo marcas que comparten al menos una clase NCL."""
+    if not clases:
+        return resultados
+    set_clases = set(clases)
+    return [r for r in resultados if set_clases & set(r.clases)]
+
+
+def _paginar(resultados, page: int, per_page: int):
+    total = len(resultados)
+    total_pages = max(1, math.ceil(total / per_page)) if total else 0
+    page = max(1, min(page, total_pages)) if total_pages else 1
+    offset = (page - 1) * per_page
+    return resultados[offset:offset + per_page], total, page, per_page, total_pages
 
 
 @app.get("/")
@@ -50,14 +85,27 @@ def uploads(filename):
     return send_from_directory(str(config.RAIZ / "uploads"), filename)
 
 
+@app.get("/api/health")
+def health():
+    """Estado del servicio para monitoreo."""
+    return jsonify({
+        "status": "ok",
+        "marcas_cargadas": len(_motor.indice),
+        "uptime_seconds": round(time.time() - _inicio, 1),
+    })
+
+
 @app.get("/api/buscar")
 def buscar():
     """Busca anterioridades para una denominacion.
 
     Query params:
-        q      (str, requerido): denominacion a evaluar.
-        clases (str, opcional): clases NCL separadas por coma (ej. "25,35").
-        top    (int, opcional): numero de resultados (default config.TOP_RESULTADOS).
+        q           (str, requerido): denominacion a evaluar.
+        clases      (str, opcional): clases NCL separadas por coma (ej. "25,35").
+        top         (int, opcional): numero de resultados del motor (default config.TOP_RESULTADOS).
+        modo_clases (str, opcional): "atenuar" (default) o "filtrar" (excluye sin clase en comun).
+        page        (int, opcional): pagina para listados (default 1).
+        per_page    (int, opcional): resultados por pagina, 10 o 20 (default 20).
     """
     consulta = (request.args.get("q") or "").strip()
     if not consulta:
@@ -71,28 +119,44 @@ def buscar():
         except ValueError:
             return jsonify({"error": "Parametro 'clases' invalido."}), 400
 
+    modo_clases = (request.args.get("modo_clases") or "atenuar").strip().lower()
+    if modo_clases not in ("atenuar", "filtrar"):
+        return jsonify({"error": "Parametro 'modo_clases' invalido."}), 400
+
     try:
         top = int(request.args.get("top", config.TOP_RESULTADOS))
     except ValueError:
         top = config.TOP_RESULTADOS
 
+    try:
+        page = int(request.args.get("page", 1))
+    except ValueError:
+        page = 1
+
+    try:
+        per_page = int(request.args.get("per_page", 20))
+    except ValueError:
+        per_page = 20
+    if per_page not in (10, 20):
+        per_page = 20
+
     resultados = _motor.buscar(consulta, clases_consulta=clases, top=top)
+
+    if modo_clases == "filtrar":
+        resultados = _filtrar_por_clases_estricto(resultados, clases)
+
+    paginados, total, page, per_page, total_pages = _paginar(
+        resultados, page, per_page,
+    )
+
     return jsonify({
         "consulta": consulta,
         "clases": clases,
-        "resultados": [
-            {
-                "nombre": r.nombre,
-                "clases": r.clases,
-                "similitud": r.score,
-                "desglose": {
-                    "ortografica": r.score_ortografico,
-                    "fonetica": r.score_fonetico,
-                },
-                "clase_relacionada": r.clase_relacionada,
-            }
-            for r in resultados
-        ],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "resultados": _serializar_resultados(paginados),
     })
 
 
