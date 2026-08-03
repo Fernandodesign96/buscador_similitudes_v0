@@ -1,51 +1,60 @@
 /**
  * Textos de la interfaz — Lenguaje Claro (INAPI).
  * Fuentes: docs/lenguaje-claro/*.pdf
- * Criterios: checklist A–H (39 ítems).
+ * Criterios: checklist A–H (37 ítems aplicables).
+ * Última revisión copy: 31-07-2026 (reunión Bernarda + Camila).
  */
 export const copy = {
   meta: {
-    title: "Buscador de anterioridades — INAPI",
+    title: "Buscador de marcas — INAPI",
     description:
-      "Compara el nombre de tu marca con marcas ya inscritas en Chile antes de presentar tu solicitud.",
+      "Compara el nombre de tu marca con marcas registradas en Chile. Identifica posibles similitudes denominativas antes de presentar tu solicitud ante INAPI.",
   },
   page: {
-    title: "Buscador de anterioridades",
+    title: "Buscador de marcas",
     /** A1, A2: mensaje principal en la parte superior */
     lead:
-      "Escribe el nombre de tu marca y revisa si existe otra marca inscrita con un nombre parecido. Así puedes anticipar posibles conflictos antes de presentar tu solicitud.",
+      "Escribe el nombre de tu marca y revisa si hay otras marcas registradas con un nombre parecido. Así puedes encontrar posibles conflictos antes de presentar tu solicitud.",
     opcionA: "Opción A — Marca más parecida",
     opcionB: "Opción B — Todas las parecidas",
     opcionADesc:
-      "Muestra solo la marca inscrita que más se parece al nombre que escribiste.",
+      "Muestra la marca registrada que más se parece al nombre que escribiste.",
     opcionBDesc:
-      "Muestra todas las marcas inscritas parecidas. Puedes filtrar por Clasificación Internacional de Niza (NCL).",
+      "Muestra todas las marcas registradas con nombre parecido. Puedes filtrar por Clasificación Internacional de Niza (NCL).",
   },
   search: {
     label: "Nombre de tu marca",
     placeholder: "Ejemplo: Mi Marca",
-    classesLabel: "Clasificación de Niza (NCL)",
+    classesLabel: "Clasificación Internacional de Niza (NCL)",
     classesOptional: "opcional",
     classesAll: "Todas las clases",
     classesCount: (n: number) =>
       n === 1 ? "1 clase seleccionada" : `${n} clases seleccionadas`,
     submit: "Buscar marcas parecidas",
     loading: "Buscando marcas parecidas…",
+    clear: "Borrar nombre y resultados",
   },
-  /** A5: solo lo necesario para la tarea; tono informativo, no legal */
-  disclaimerShort:
-    "El porcentaje es orientativo. No reemplaza el examen que realiza INAPI al revisar tu solicitud.",
-  disclaimerFull:
-    "El porcentaje indica qué tan parecido es el nombre respecto a marcas ya inscritas, por escritura y por sonido. Te orienta antes de presentar tu solicitud. INAPI revisa cada caso en el examen de fondo y puede llegar a otra conclusión.",
+  /**
+   * Disclaimer legal acordado (30-07-2026).
+   * Se muestra siempre al final del contenido principal (visible sin necesidad de buscar).
+   * Párrafos separados para legibilidad; el sentido jurídico se mantiene.
+   */
+  disclaimerLegal: {
+    title: "Aviso legal",
+    paragraphs: [
+      "Este buscador de marcas permite identificar potenciales coincidencias o similitudes con marcas previamente solicitadas o registradas ante INAPI. Sus resultados tienen un carácter meramente informativo y orientador para los usuarios. No incluye el análisis de los elementos figurativos, gráficos o de imagen. Los resultados pueden contener algunos errores o imprecisiones.",
+      "En consecuencia, su uso es de exclusiva responsabilidad de quien lo utiliza y, en ningún caso, sustituye, anticipa ni prejuzga el examen sustantivo que corresponde realizar a INAPI conforme a la normativa vigente, ni asegura el resultado de dicho examen o la eventual concesión o rechazo de una solicitud de marca.",
+    ],
+  },
   results: {
     opcionASummary: (q: string) =>
-      `La marca inscrita más parecida a «${q}» es:`,
+      `La marca registrada más parecida a «${q}» es:`,
     opcionBSummary: (q: string, total: number) =>
       total === 1
         ? `Encontramos 1 marca parecida a «${q}»:`
         : `Encontramos ${total} marcas parecidas a «${q}»:`,
     empty:
-      "No encontramos marcas inscritas con un nombre parecido al que escribiste.",
+      "No encontramos marcas registradas con un nombre parecido al que escribiste.",
     emptyFiltered:
       "No hay marcas parecidas en las clases que elegiste. Prueba otras clases o busca sin filtrar.",
     error: (msg: string) =>
@@ -60,13 +69,13 @@ export const copy = {
   },
   help: {
     /** C6: resumen al inicio del bloque extenso */
-    title: "Cómo leer los resultados",
+    title: "Cómo entender los resultados",
     resumen:
-      "El porcentaje mide parecido de nombres, no si tu marca será aceptada. Abajo explicamos qué significa y cómo se calcula.",
-    porcentajeTitulo: "Qué significa el porcentaje",
+      "El buscador genera un resultado porcentual, el cual muestra el parecido entre tu marca y las marcas ya registradas, sin embargo, esto no indica estrictamente si tu solicitud será aceptada o rechazada.",
+    porcentajeTitulo: "¿Qué significa el porcentaje?",
     porcentajeTexto:
-      "Compara el nombre que escribiste con una marca ya inscrita. Considera cómo se escribe y cómo suena en español de Chile. Un porcentaje alto indica más parecido; no indica que tu solicitud será rechazada.",
-    criteriosTitulo: "Cómo calculamos el parecido",
+      "Compara el nombre que escribiste con una marca ya registrada, considerando cómo se escribe y cómo suena en español de Chile. Un porcentaje alto indica que tu marca posee mayor parecido con la encontrada, pero esto no significa que tu solicitud podría ser rechazada.",
+    criteriosTitulo: "¿Cómo se calcula el parecido?",
     escritoTitulo: "Parecido al escribir",
     escritoTexto:
       "Mide si las palabras se ven similares. Por ejemplo: «Casa Blanca» y «Blanca Casa».",
@@ -74,23 +83,25 @@ export const copy = {
     sonidoTexto:
       "Mide si suenan parecido al decirlas en Chile. Por ejemplo: «Cauquenes» y «Kaukenes».",
     combinacionTexto:
-      "Combinamos ambos criterios: 58 % por escritura y 42 % por pronunciación.",
-    nivelesTitulo: "Qué hacer según el porcentaje",
+      "Ambos criterios combinados generan el porcentaje que puedes ver en cada marca encontrada, utilizando un color distinto para diferenciar qué tanto se parecen entre sí.",
+    nivelesTitulo: "¿Qué significa cada porcentaje?",
     nivelAlto: {
       rango: "75 % a 100 %",
-      accion: "Revisa con atención antes de presentar tu solicitud.",
+      accion: "Existe mucha similitud, por lo que se recomienda comparar qué características se repiten en ambas marcas —como palabras y/o clases de niza—, antes de presentar tu solicitud.",
     },
     nivelMedio: {
       rango: "50 % a 74 %",
-      accion: "Hay parecido parcial. Revisa el tipo de productos o servicios de cada marca.",
+      accion:
+        "Existe similitud parcial, es decir, son menos las características que se repiten entre ambas marcas, aún así se recomienda revisar la solicitud de tu marca.",
     },
     nivelBajo: {
       rango: "0 % a 49 %",
-      accion: "El parecido es bajo. El conflicto es poco probable, según el nombre.",
+      accion:
+        "La similitud es baja o muy baja, por lo que los conflictos encontrados entre las características de tu marca con la encontrada son poco probables o casi nulos.",
     },
-    nclTitulo: "Qué es la Clasificación de Niza (NCL)",
+    nclTitulo: "¿Qué es la Clasificación Internacional de Niza (NCL)?",
     nclTexto:
-      "Las marcas se inscriben por tipo de producto o servicio. Cada tipo tiene un número de clase (1 a 45). Si indicas las clases de tu marca, resaltamos las coincidencias que comparten al menos una clase contigo.",
+      "Las marcas se registran por tipo de producto o servicio. Cada tipo tiene un número de clase (1 a 45). Si indicas la o las clases de tu marca, resaltamos las coincidencias que comparten al menos una clase con la que pertenece a tu marca.",
   },
   pagination: {
     anterior: "Página anterior",
@@ -117,7 +128,7 @@ export const copy = {
     breadcrumb: {
       inicio: "Inicio",
       marcas: "Marcas",
-      actual: "Buscador de anterioridades",
+      actual: "Buscador de marcas",
     },
     footer: {
       institucion: "Instituto Nacional de Propiedad Industrial (INAPI)",
@@ -152,7 +163,7 @@ export const copy = {
         accesibilidad: "Declaración de accesibilidad",
         arco: "Política de privacidad y derechos ARCO",
       },
-      actualizacion: "Última actualización: 29-07-2026",
+      actualizacion: "Última actualización: 31-07-2026",
     },
   },
 } as const;

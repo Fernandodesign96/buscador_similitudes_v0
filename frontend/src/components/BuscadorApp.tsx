@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { XIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,6 +99,14 @@ export function BuscadorApp() {
     setPage(1);
   };
 
+  const handleClearSearch = () => {
+    setConsulta("");
+    setData(null);
+    setError(null);
+    setSearched(false);
+    setPage(1);
+  };
+
   return (
     <>
       <div className="border-b border-[#E6E6E6] bg-white px-6 py-8 text-left">
@@ -157,15 +166,31 @@ export function BuscadorApp() {
                 <label htmlFor="searchInput" className={searchFieldLabelClass}>
                   {copy.search.label}
                 </label>
-                <Input
-                  id="searchInput"
-                  type="text"
-                  value={consulta}
-                  onChange={(e) => setConsulta(e.target.value)}
-                  placeholder={copy.search.placeholder}
-                  className={cn(searchControlClass, "text-left")}
-                  autoComplete="off"
-                />
+                <div className="relative">
+                  <Input
+                    id="searchInput"
+                    type="text"
+                    value={consulta}
+                    onChange={(e) => setConsulta(e.target.value)}
+                    placeholder={copy.search.placeholder}
+                    className={cn(
+                      searchControlClass,
+                      "text-left",
+                      consulta.trim() && "pr-10",
+                    )}
+                    autoComplete="off"
+                  />
+                  {consulta.trim() && (
+                    <button
+                      type="button"
+                      onClick={handleClearSearch}
+                      aria-label={copy.search.clear}
+                      className="absolute top-1/2 right-2 flex size-7 -translate-y-1/2 items-center justify-center rounded text-[#999] transition-colors hover:bg-[#f2f2f2] hover:text-[#666] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inapi-blue/40"
+                    >
+                      <XIcon className="size-4" aria-hidden />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <ClassPicker selected={clases} onChange={setClases} />
@@ -186,10 +211,6 @@ export function BuscadorApp() {
             </div>
           </form>
         </section>
-
-        <p className="mb-8 text-sm leading-relaxed text-inapi-muted">
-          {copy.disclaimerShort}
-        </p>
 
         {vista === "opcion-b" && (
           <p className="mb-6 text-sm text-inapi-muted">{copy.results.opcionBNota}</p>
@@ -241,14 +262,27 @@ export function BuscadorApp() {
                     onPageChange={handlePageChange}
                   />
                 )}
-
-                <p className="mt-8 rounded bg-[#f2f2f2] p-6 text-sm leading-relaxed text-inapi-muted">
-                  {copy.disclaimerFull}
-                </p>
               </>
             )}
           </section>
         )}
+
+        <aside
+          className="mt-8 rounded bg-[#f2f2f2] p-6 text-sm leading-relaxed text-inapi-muted"
+          aria-labelledby="disclaimer-legal-title"
+        >
+          <h2
+            id="disclaimer-legal-title"
+            className="mb-4 text-base font-bold text-[#111]"
+          >
+            {copy.disclaimerLegal.title}
+          </h2>
+          {copy.disclaimerLegal.paragraphs.map((paragraph) => (
+            <p key={paragraph.slice(0, 40)} className="mt-3 first:mt-0">
+              {paragraph}
+            </p>
+          ))}
+        </aside>
 
       </main>
     </>

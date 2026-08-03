@@ -1,6 +1,7 @@
 # Checklist Lenguaje Claro — UI del buscador
 
-**Fecha revisión:** 29-07-2026  
+**Fecha revisión:** 31-07-2026  
+**Revisión anterior:** 29-07-2026  
 **Textos centralizados en:** `frontend/src/lib/copy.ts`  
 **Fuentes PDF:** `docs/lenguaje-claro/`
 
@@ -11,26 +12,34 @@
 | `meta-mei.pdf` | Contexto brecha calidad web INAPI (74 %) |
 | `ui-kit-gobierno-3.0.1.pdf` | Referencia diseño Gobierno de Chile |
 
+## Cambios 31-07-2026 (reunión Bernarda + Camila)
+
+- H1 y breadcrumb: «Buscador de marcas» (antes «Buscador de anterioridades»).
+- Revisión integral de copy en `copy.ts` (lead, ayuda, resultados, meta).
+- Disclaimer legal acordado al **final del contenido principal**, siempre visible (con o sin búsqueda).
+- Eliminado `disclaimerShort` antes del formulario (redundante con aviso legal).
+- Selector NCL: sin cambios funcionales (mejora futura pendiente).
+
 ## A. Estructura y organización
 
 | ID | Criterio | Estado | Implementación |
 |----|----------|--------|----------------|
-| A1 | Mensaje principal arriba | ✅ | `copy.page.lead` bajo el H1, antes del formulario |
-| A2 | Pirámide invertida | ✅ | Acción (buscar) antes del acordeón de ayuda |
-| A3 | Secciones con encabezados | ✅ | H1, H2 en ayuda; secciones en resultados |
+| A1 | Mensaje principal arriba | ✅ | `copy.page.lead` bajo el H1 |
+| A2 | Pirámide invertida | ✅ | Lead → opciones → ayuda → formulario → resultados |
+| A3 | Secciones con encabezados | ✅ | H1, H2 en ayuda y aviso legal |
 | A4 | ≤110 palabras por sección | ✅ | Párrafos acortados en `copy.ts` y ayuda |
-| A5 | Solo información necesaria | ✅ | Disclaimer breve; ayuda colapsable al final |
+| A5 | Solo información necesaria | ✅ | Aviso legal siempre visible al final; ayuda colapsable |
 
 ## B. Lenguaje claro
 
 | ID | Criterio | Estado | Implementación |
 |----|----------|--------|----------------|
 | B1 | Voz activa | ✅ | «Escribe», «Revisa», «Combinamos» |
-| B2 | Palabras comunes | ✅ | «marca inscrita» en vez de solo «anterioridad» |
+| B2 | Palabras comunes | ✅ | «marca registrada» en vez de «anterioridad» |
 | B3 | Siglas definidas | ✅ | «Clasificación Internacional de Niza (NCL)» |
 | B4 | Sin extranjerismos | ✅ | Sin anglicismos en copy principal |
 | B5 | Tono positivo | ✅ | Indica qué hacer según porcentaje |
-| B6 | Tuteo consistente | ✅ | «tu marca», «escribiste» |
+| B6 | Tuteo consistente | ✅ | «tu marca», «escribiste» (aviso legal en tercera persona) |
 | B7 | Sin relleno | ✅ | Eliminadas frases burocráticas |
 
 ## C. Redacción y concisión
@@ -39,8 +48,8 @@
 |----|----------|--------|----------------|
 | C1 | Orden sujeto-verbo-predicado | ✅ | Oraciones directas |
 | C2 | Presente simple | ✅ | «indica», «muestra», «combinamos» |
-| C3 | Oraciones cortas | ✅ | Máx. ~25 palabras por oración |
-| C4 | Una idea por párrafo | ✅ | Párrafos separados en ayuda |
+| C3 | Oraciones cortas | ✅ | Máx. ~25 palabras por oración (excepto aviso legal) |
+| C4 | Una idea por párrafo | ✅ | Párrafos separados en ayuda y aviso legal |
 | C5 | Párrafos cortos | ✅ | 2–4 líneas en desktop |
 | C6 | Resumen al inicio (texto extenso) | ✅ | «Resumen:» en acordeón de ayuda |
 | C7 | Listas para requisitos/niveles | ✅ | Lista de niveles de similitud |
@@ -49,7 +58,7 @@
 
 | ID | Criterio | Estado | Implementación |
 |----|----------|--------|----------------|
-| D1 | Ortografía revisada | ✅ | Revisión manual 29-07-2026 |
+| D1 | Ortografía revisada | ✅ | Revisión manual 31-07-2026 |
 | D2 | Puntuación correcta | ✅ | Puntos seguidos preferidos |
 | D3 | Espacio entre párrafos | ✅ | `space-y-*`, márgenes |
 | D4 | Alineación izquierda | ✅ | `text-left` en contenido |
@@ -63,8 +72,8 @@
 |----|----------|--------|----------------|
 | E1 | Contenido objetivo | ✅ | Sin adjetivos promocionales |
 | E2 | Autoría INAPI visible | ✅ | Header y footer institucional |
-| E3 | Fecha de actualización | ✅ | Pie: «Última actualización: 29-07-2026» |
-| E4 | Título fiel al contenido | ✅ | H1 = buscador de anterioridades |
+| E3 | Fecha de actualización | ✅ | Pie: «Última actualización: 31-07-2026» |
+| E4 | Título fiel al contenido | ✅ | H1 = «Buscador de marcas» |
 
 ## F. Enlaces y referencias
 
