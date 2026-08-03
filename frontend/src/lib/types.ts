@@ -31,5 +31,3 @@ export interface BusquedaParams {
   page?: number;
   per_page?: number;
 }
-
-export type VistaProducto = "opcion-a" | "opcion-b";

@@ -8,11 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HelpAccordion } from "@/components/help/HelpAccordion";
 import { ResultCard } from "@/components/results/ResultCard";
+import { ResultsGuidance } from "@/components/results/ResultsGuidance";
 import { ResultsPagination } from "@/components/results/ResultsPagination";
 import { ClassPicker } from "@/components/search/ClassPicker";
 import { ApiError, buscarMarcas } from "@/lib/api";
 import { copy } from "@/lib/copy";
-import type { BusquedaResponse, VistaProducto } from "@/lib/types";
+import type { BusquedaResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
   searchControlClass,
@@ -36,7 +37,6 @@ function usePerPage() {
 
 export function BuscadorApp() {
   const perPage = usePerPage();
-  const [vista, setVista] = useState<VistaProducto>("opcion-a");
   const [consulta, setConsulta] = useState("");
   const [clases, setClases] = useState<number[]>([]);
   const [page, setPage] = useState(1);
@@ -55,14 +55,13 @@ export function BuscadorApp() {
       setSearched(true);
 
       try {
-        const esOpcionA = vista === "opcion-a";
         const response = await buscarMarcas({
           q: trimmed,
           clases: clases.length > 0 ? clases : undefined,
-          top: esOpcionA ? 1 : 200,
-          modo_clases: esOpcionA ? "atenuar" : "filtrar",
-          page: esOpcionA ? 1 : pageNum,
-          per_page: esOpcionA ? 1 : perPage,
+          top: 200,
+          modo_clases: "filtrar",
+          page: pageNum,
+          per_page: perPage,
         });
         setData(response);
         setPage(response.page);
@@ -77,7 +76,7 @@ export function BuscadorApp() {
         setLoading(false);
       }
     },
-    [vista, clases, perPage],
+    [clases, perPage],
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -89,14 +88,6 @@ export function BuscadorApp() {
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
     void ejecutarBusqueda(consulta, newPage);
-  };
-
-  const handleVistaChange = (nueva: VistaProducto) => {
-    setVista(nueva);
-    setData(null);
-    setError(null);
-    setSearched(false);
-    setPage(1);
   };
 
   const handleClearSearch = () => {
@@ -114,45 +105,6 @@ export function BuscadorApp() {
           <h1 className="font-[family-name:var(--font-roboto-slab)] text-[31px] font-medium text-[#111]">
             {copy.page.title}
           </h1>
-          <p className="mt-3 max-w-2xl text-base leading-relaxed text-inapi-muted">
-            {copy.page.lead}
-          </p>
-
-          <div
-            className="mt-6 flex flex-wrap gap-3"
-            role="group"
-            aria-label="Modo de visualización de resultados"
-          >
-            <Button
-              type="button"
-              variant={vista === "opcion-a" ? "default" : "outline"}
-              className={cn(
-                "text-left",
-                vista === "opcion-a" &&
-                  "bg-inapi-blue-dark hover:bg-inapi-blue-dark/90",
-              )}
-              onClick={() => handleVistaChange("opcion-a")}
-            >
-              {copy.page.opcionA}
-            </Button>
-            <Button
-              type="button"
-              variant={vista === "opcion-b" ? "default" : "outline"}
-              className={cn(
-                "text-left",
-                vista === "opcion-b" &&
-                  "bg-inapi-blue-dark hover:bg-inapi-blue-dark/90",
-              )}
-              onClick={() => handleVistaChange("opcion-b")}
-            >
-              {copy.page.opcionB}
-            </Button>
-          </div>
-          <p className="mt-2 text-sm text-inapi-muted">
-            {vista === "opcion-a"
-              ? copy.page.opcionADesc
-              : copy.page.opcionBDesc}
-          </p>
         </div>
       </div>
 
@@ -212,9 +164,7 @@ export function BuscadorApp() {
           </form>
         </section>
 
-        {vista === "opcion-b" && (
-          <p className="mb-6 text-sm text-inapi-muted">{copy.results.opcionBNota}</p>
-        )}
+        <p className="mb-6 text-sm text-inapi-muted">{copy.results.opcionBNota}</p>
 
         {searched && (
           <section aria-live="polite" aria-busy={loading}>
@@ -233,35 +183,30 @@ export function BuscadorApp() {
 
             {!loading && !error && data && (
               <>
-                <p className="mb-6 text-sm text-inapi-muted">
-                  {vista === "opcion-a"
-                    ? copy.results.opcionASummary(data.consulta)
-                    : copy.results.opcionBSummary(data.consulta, data.total)}
-                </p>
-
                 {data.resultados.length === 0 ? (
                   <p className="py-12 text-center text-sm text-inapi-muted">
-                    {vista === "opcion-b" && clases.length > 0
+                    {clases.length > 0
                       ? copy.results.emptyFiltered
                       : copy.results.empty}
                   </p>
                 ) : (
-                  <ul className="list-none">
-                    {data.resultados.map((r) => (
-                      <li key={`${r.nombre}-${r.similitud}`}>
-                        <ResultCard resultado={r} />
-                      </li>
-                    ))}
-                  </ul>
+                  <>
+                    <ResultsGuidance total={data.total} />
+                    <ul className="list-none">
+                      {data.resultados.map((r) => (
+                        <li key={`${r.nombre}-${r.similitud}`}>
+                          <ResultCard resultado={r} />
+                        </li>
+                      ))}
+                    </ul>
+                  </>
                 )}
 
-                {vista === "opcion-b" && (
-                  <ResultsPagination
-                    page={data.page}
-                    totalPages={data.total_pages}
-                    onPageChange={handlePageChange}
-                  />
-                )}
+                <ResultsPagination
+                  page={data.page}
+                  totalPages={data.total_pages}
+                  onPageChange={handlePageChange}
+                />
               </>
             )}
           </section>
@@ -283,7 +228,6 @@ export function BuscadorApp() {
             </p>
           ))}
         </aside>
-
       </main>
     </>
   );

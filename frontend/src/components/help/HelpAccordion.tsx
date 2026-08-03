@@ -21,17 +21,21 @@ export function HelpAccordion() {
         </span>
       </summary>
       <div className="w-full space-y-6 border-t border-inapi-blue/20 bg-white px-6 py-6 text-left">
-        <p className="text-sm leading-relaxed text-inapi-muted">
-          <strong className="font-bold text-[#111]">Resumen:</strong>{" "}
-          {copy.help.resumen}
-        </p>
-
         <section>
           <h2 className="mb-2 text-base font-bold text-[#111]">
             {copy.help.porcentajeTitulo}
           </h2>
           <p className="text-sm leading-relaxed text-inapi-muted">
             {copy.help.porcentajeTexto}
+          </p>
+        </section>
+
+        <section>
+          <h2 className="mb-2 text-base font-bold text-[#111]">
+            {copy.help.nclTitulo}
+          </h2>
+          <p className="text-sm leading-relaxed text-inapi-muted">
+            {copy.help.nclTexto}
           </p>
         </section>
 
@@ -75,15 +79,6 @@ export function HelpAccordion() {
               </li>
             ))}
           </ul>
-        </section>
-
-        <section>
-          <h2 className="mb-2 text-base font-bold text-[#111]">
-            {copy.help.nclTitulo}
-          </h2>
-          <p className="text-sm leading-relaxed text-inapi-muted">
-            {copy.help.nclTexto}
-          </p>
         </section>
       </div>
     </details>
