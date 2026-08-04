@@ -1,0 +1,15 @@
+[Unit]
+Description=Buscador de Anterioridades INAPI (API Flask)
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/buscador
+Environment="PATH=/opt/buscador/.venv/bin"
+ExecStart=/opt/buscador/.venv/bin/gunicorn --bind 127.0.0.1:5001 --workers 1 --timeout 120 api:app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

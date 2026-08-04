@@ -1,0 +1,976 @@
+[1mdiff --git a/api.py b/api.py[m
+[1mindex 87a2f19..f13e968 100644[m
+[1m--- a/api.py[m
+[1m+++ b/api.py[m
+[36m@@ -1,96 +1,164 @@[m
+[31m-"""API Flask del buscador de anterioridades.[m
+[31m-[m
+[31m-Expone el motor de busqueda por similitud denominativa para uso publico:[m
+[31m-un solicitante ingresa una denominacion y recibe las marcas ya inscritas[m
+[31m-mas similares, con su porcentaje de similitud.[m
+[31m-[m
+[31m-Uso:[m
+[31m-    python api.py[m
+[31m-"""[m
+[31m-from __future__ import annotations[m
+[31m-[m
+[31m-import logging[m
+[31m-[m
+[31m-from flask import Flask, jsonify, request, send_from_directory[m
+[31m-[m
+[31m-from buscador import config[m
+[31m-from buscador.busqueda import MotorBusqueda[m
+[31m-from buscador.indice import IndiceBusqueda[m
+[31m-[m
+[31m-logging.basicConfig(level=logging.INFO,[m
+[31m-                    format="%(asctime)s  %(levelname)-7s  %(name)s | %(message)s",[m
+[31m-                    datefmt="%H:%M:%S")[m
+[31m-logger = logging.getLogger(__name__)[m
+[31m-[m
+[31m-app = Flask(__name__, static_folder=None)[m
+[31m-[m
+[31m-logger.info("Cargando indice y motor (una sola vez al arrancar)...")[m
+[31m-_motor = MotorBusqueda(IndiceBusqueda())[m
+[31m-logger.info("Buscador listo.")[m
+[31m-[m
+[31m-[m
+[31m-@app.get("/")[m
+[31m-def index():[m
+[31m-    return send_from_directory(str(config.RAIZ), "index.html")[m
+[31m-[m
+[31m-[m
+[31m-@app.get("/uploads/<path:filename>")[m
+[31m-def uploads(filename):[m
+[31m-    """Sirve archivos estaticos referenciados por index.html (logo, etc.).[m
+[31m-[m
+[31m-    Necesario porque la app se crea con static_folder=None (no hay manejo[m
+[31m-    automatico de estaticos de Flask); sin esta ruta, cualquier <img[m
+[31m-    src="uploads/..."> en index.html devuelve 404 aunque el archivo exista[m
+[31m-    en disco.[m
+[31m-    """[m
+[31m-    return send_from_directory(str(config.RAIZ / "uploads"), filename)[m
+[31m-[m
+[31m-[m
+[31m-@app.get("/api/buscar")[m
+[31m-def buscar():[m
+[31m-    """Busca anterioridades para una denominacion.[m
+[31m-[m
+[31m-    Query params:[m
+[31m-        q      (str, requerido): denominacion a evaluar.[m
+[31m-        clases (str, opcional): clases NCL separadas por coma (ej. "25,35").[m
+[31m-        top    (int, opcional): numero de resultados (default config.TOP_RESULTADOS).[m
+[31m-    """[m
+[31m-    consulta = (request.args.get("q") or "").strip()[m
+[31m-    if not consulta:[m
+[31m-        return jsonify({"error": "Falta el parametro 'q'."}), 400[m
+[31m-[m
+[31m-    clases_raw = (request.args.get("clases") or "").strip()[m
+[31m-    clases = [][m
+[31m-    if clases_raw:[m
+[31m-        try:[m
+[31m-            clases = [int(c) for c in clases_raw.split(",") if c.strip()][m
+[31m-        except ValueError:[m
+[31m-            return jsonify({"error": "Parametro 'clases' invalido."}), 400[m
+[31m-[m
+[31m-    try:[m
+[31m-        top = int(request.args.get("top", config.TOP_RESULTADOS))[m
+[31m-    except ValueError:[m
+[31m-        top = config.TOP_RESULTADOS[m
+[31m-[m
+[31m-    resultados = _motor.buscar(consulta, clases_consulta=clases, top=top)[m
+[31m-    return jsonify({[m
+[31m-        "consulta": consulta,[m
+[31m-        "clases": clases,[m
+[31m-        "resultados": [[m
+[31m-            {[m
+[31m-                "nombre": r.nombre,[m
+[31m-                "clases": r.clases,[m
+[31m-                "similitud": r.score,[m
+[31m-                "desglose": {[m
+[31m-                    "ortografica": r.score_ortografico,[m
+[31m-                    "fonetica": r.score_fonetico,[m
+[31m-                },[m
+[31m-                "clase_relacionada": r.clase_relacionada,[m
+[31m-            }[m
+[31m-            for r in resultados[m
+[31m-        ],[m
+[31m-    })[m
+[31m-[m
+[31m-[m
+[31m-if __name__ == "__main__":[m
+[32m+[m[32m"""API Flask del buscador de anterioridades.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mExpone el motor de busqueda por similitud denominativa para uso publico:[m[41m[m
+[32m+[m[32mun solicitante ingresa una denominacion y recibe las marcas ya inscritas[m[41m[m
+[32m+[m[32mmas similares, con su porcentaje de similitud.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mUso:[m[41m[m
+[32m+[m[32m    python api.py[m[41m[m
+[32m+[m[32m"""[m[41m[m
+[32m+[m[32mfrom __future__ import annotations[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mimport logging[m[41m[m
+[32m+[m[32mimport math[m[41m[m
+[32m+[m[32mimport os[m[41m[m
+[32m+[m[32mimport time[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mos.environ.setdefault("HF_HUB_OFFLINE", "1")[m[41m[m
+[32m+[m[32mos.environ.setdefault("TRANSFORMERS_OFFLINE", "1")[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mfrom flask import Flask, jsonify, request, send_from_directory[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mfrom buscador import config[m[41m[m
+[32m+[m[32mfrom buscador.busqueda import MotorBusqueda[m[41m[m
+[32m+[m[32mfrom buscador.indice import IndiceBusqueda[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mlogging.basicConfig(level=logging.INFO,[m[41m[m
+[32m+[m[32m                    format="%(asctime)s  %(levelname)-7s  %(name)s | %(message)s",[m[41m[m
+[32m+[m[32m                    datefmt="%H:%M:%S")[m[41m[m
+[32m+[m[32mlogger = logging.getLogger(__name__)[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mapp = Flask(__name__, static_folder=None)[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mlogger.info("Cargando indice y motor (una sola vez al arrancar)...")[m[41m[m
+[32m+[m[32m_motor = MotorBusqueda(IndiceBusqueda())[m[41m[m
+[32m+[m[32m_inicio = time.time()[m[41m[m
+[32m+[m[32mlogger.info("Buscador listo.")[m[41m[m
+[32m+[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mdef _serializar_resultados(resultados):[m[41m[m
+[32m+[m[32m    return [[m[41m[m
+[32m+[m[32m        {[m[41m[m
+[32m+[m[32m            "nombre": r.nombre,[m[41m[m
+[32m+[m[32m            "clases": r.clases,[m[41m[m
+[32m+[m[32m            "similitud": r.score,[m[41m[m
+[32m+[m[32m            "desglose": {[m[41m[m
+[32m+[m[32m                "ortografica": r.score_ortografico,[m[41m[m
+[32m+[m[32m                "fonetica": r.score_fonetico,[m[41m[m
+[32m+[m[32m            },[m[41m[m
+[32m+[m[32m            "clase_relacionada": r.clase_relacionada,[m[41m[m
+[32m+[m[32m        }[m[41m[m
+[32m+[m[32m        for r in resultados[m[41m[m
+[32m+[m[32m    ][m[41m[m
+[32m+[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mdef _filtrar_por_clases_estricto(resultados, clases: list[int]):[m[41m[m
+[32m+[m[32m    """Opcion B: solo marcas que comparten al menos una clase NCL."""[m[41m[m
+[32m+[m[32m    if not clases:[m[41m[m
+[32m+[m[32m        return resultados[m[41m[m
+[32m+[m[32m    set_clases = set(clases)[m[41m[m
+[32m+[m[32m    return [r for r in resultados if set_clases & set(r.clases)][m[41m[m
+[32m+[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mdef _paginar(resultados, page: int, per_page: int):[m[41m[m
+[32m+[m[32m    total = len(resultados)[m[41m[m
+[32m+[m[32m    total_pages = max(1, math.ceil(total / per_page)) if total else 0[m[41m[m
+[32m+[m[32m    page = max(1, min(page, total_pages)) if total_pages else 1[m[41m[m
+[32m+[m[32m    offset = (page - 1) * per_page[m[41m[m
+[32m+[m[32m    return resultados[offset:offset + per_page], total, page, per_page, total_pages[m[41m[m
+[32m+[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m@app.get("/")[m[41m[m
+[32m+[m[32mdef index():[m[41m[m
+[32m+[m[32m    return send_from_directory(str(config.RAIZ), "index.html")[m[41m[m
+[32m+[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m@app.get("/uploads/<path:filename>")[m[41m[m
+[32m+[m[32mdef uploads(filename):[m[41m[m
+[32m+[m[32m    """Sirve archivos estaticos referenciados por index.html (logo, etc.).[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    Necesario porque la app se crea con static_folder=None (no hay manejo[m[41m[m
+[32m+[m[32m    automatico de estaticos de Flask); sin esta ruta, cualquier <img[m[41m[m
+[32m+[m[32m    src="uploads/..."> en index.html devuelve 404 aunque el archivo exista[m[41m[m
+[32m+[m[32m    en disco.[m[41m[m
+[32m+[m[32m    """[m[41m[m
+[32m+[m[32m    return send_from_directory(str(config.RAIZ / "uploads"), filename)[m[41m[m
+[32m+[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m@app.get("/api/health")[m[41m[m
+[32m+[m[32mdef health():[m[41m[m
+[32m+[m[32m    """Estado del servicio para monitoreo."""[m[41m[m
+[32m+[m[32m    return jsonify({[m[41m[m
+[32m+[m[32m        "status": "ok",[m[41m[m
+[32m+[m[32m        "marcas_cargadas": len(_motor.indice),[m[41m[m
+[32m+[m[32m        "uptime_seconds": round(time.time() - _inicio, 1),[m[41m[m
+[32m+[m[32m    })[m[41m[m
+[32m+[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m@app.get("/api/buscar")[m[41m[m
+[32m+[m[32mdef buscar():[m[41m[m
+[32m+[m[32m    """Busca anterioridades para una denominacion.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    Query params:[m[41m[m
+[32m+[m[32m        q           (str, requerido): denominacion a evaluar.[m[41m[m
+[32m+[m[32m        clases      (str, opcional): clases NCL separadas por coma (ej. "25,35").[m[41m[m
+[32m+[m[32m        top         (int, opcional): numero de resultados del motor (default config.TOP_RESULTADOS).[m[41m[m
+[32m+[m[32m        modo_clases (str, opcional): "atenuar" (default) o "filtrar" (excluye sin clase en comun).[m[41m[m
+[32m+[m[32m        page        (int, opcional): pagina para listados (default 1).[m[41m[m
+[32m+[m[32m        per_page    (int, opcional): resultados por pagina, 10 o 20 (default 20).[m[41m[m
+[32m+[m[32m    """[m[41m[m
+[32m+[m[32m    consulta = (request.args.get("q") or "").strip()[m[41m[m
+[32m+[m[32m    if not consulta:[m[41m[m
+[32m+[m[32m        return jsonify({"error": "Falta el parametro 'q'."}), 400[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    clases_raw = (request.args.get("clases") or "").strip()[m[41m[m
+[32m+[m[32m    clases = [][m[41m[m
+[32m+[m[32m    if clases_raw:[m[41m[m
+[32m+[m[32m        try:[m[41m[m
+[32m+[m[32m            clases = [int(c) for c in clases_raw.split(",") if c.strip()][m[41m[m
+[32m+[m[32m        except ValueError:[m[41m[m
+[32m+[m[32m            return jsonify({"error": "Parametro 'clases' invalido."}), 400[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    modo_clases = (request.args.get("modo_clases") or "atenuar").strip().lower()[m[41m[m
+[32m+[m[32m    if modo_clases not in ("atenuar", "filtrar"):[m[41m[m
+[32m+[m[32m        return jsonify({"error": "Parametro 'modo_clases' invalido."}), 400[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    try:[m[41m[m
+[32m+[m[32m        top = int(request.args.get("top", config.TOP_RESULTADOS))[m[41m[m
+[32m+[m[32m    except ValueError:[m[41m[m
+[32m+[m[32m        top = config.TOP_RESULTADOS[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    try:[m[41m[m
+[32m+[m[32m        page = int(request.args.get("page", 1))[m[41m[m
+[32m+[m[32m    except ValueError:[m[41m[m
+[32m+[m[32m        page = 1[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    try:[m[41m[m
+[32m+[m[32m        per_page = int(request.args.get("per_page", 20))[m[41m[m
+[32m+[m[32m    except ValueError:[m[41m[m
+[32m+[m[32m        per_page = 20[m[41m[m
+[32m+[m[32m    if per_page not in (10, 20):[m[41m[m
+[32m+[m[32m        per_page = 20[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    resultados = _motor.buscar(consulta, clases_consulta=clases, top=top)[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    if modo_clases == "filtrar":[m[41m[m
+[32m+[m[32m        resultados = _filtrar_por_clases_estricto(resultados, clases)[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    paginados, total, page, per_page, total_pages = _paginar([m[41m[m
+[32m+[m[32m        resultados, page, per_page,[m[41m[m
+[32m+[m[32m    )[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    return jsonify({[m[41m[m
+[32m+[m[32m        "consulta": consulta,[m[41m[m
+[32m+[m[32m        "clases": clases,[m[41m[m
+[32m+[m[32m        "total": total,[m[41m[m
+[32m+[m[32m        "page": page,[m[41m[m
+[32m+[m[32m        "per_page": per_page,[m[41m[m
+[32m+[m[32m        "total_pages": total_pages,[m[41m[m
+[32m+[m[32m        "resultados": _serializar_resultados(paginados),[m[41m[m
+[32m+[m[32m    })[m[41m[m
+[32m+[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mif __name__ == "__main__":[m[41m[m
+     app.run(host="127.0.0.1", port=5001, debug=False)[m
+\ No newline at end of file[m
+[1mdiff --git a/buscador/busqueda.py b/buscador/busqueda.py[m
+[1mindex dbe848b..3b81c53 100644[m
+[1m--- a/buscador/busqueda.py[m
+[1m+++ b/buscador/busqueda.py[m
+[36m@@ -1,280 +1,267 @@[m
+[31m-"""Motor de busqueda de anterioridades por similitud denominativa.[m
+[31m-[m
+[31m-Dada una denominacion consultada, se compara contra el UNIVERSO COMPLETO de[m
+[31m-marcas oponibles combinando dos senales:[m
+[31m-[m
+[31m-  - ortografica (rapidfuzz sobre la forma canonica)[m
+[31m-  - fonetica    (rapidfuzz sobre la clave fonetica espanol-Chile)[m
+[31m-[m
+[31m-Decision de julio 2026: se retiro la senal semantica del motor (embeddings +[m
+[31m-FAISS) por decision de negocio.[m
+[31m-[m
+[31m-Migracion a cdist (julio 2026, produccion con universo completo): el primer[m
+[31m-diseno post-FAISS comparaba la consulta contra las ~218.369 marcas con un[m
+[31m-loop puro en Python (uno por candidato), lo que tomaba ~13s por consulta.[m
+[31m-Se migro a una estrategia en dos pasos, vectorizada con[m
+[31m-rapidfuzz.process.cdist (implementado en C++):[m
+[31m-[m
+[31m-  1. Prefiltro bruto: cdist calcula scores ortografico y fonetico SIN el[m
+[31m-     descuento de palabras genericas contra el universo completo en un solo[m
+[31m-     llamado vectorizado, y se toman los config.CANDIDATOS_PREFILTRO mejores[m
+[31m-     candidatos por score combinado bruto.[m
+[31m-  2. Recalculo exacto: solo sobre ese top-N (no sobre las 218.369 marcas) se[m
+[31m-     aplica la logica exacta con descuento de genericos y el factor de[m
+[31m-     clase NCL, y se ordena para devolver el top final.[m
+[31m-[m
+[31m-Esta division es segura porque descontar palabras genericas solo puede[m
+[31m-REDUCIR un score, nunca subirlo: el ranking bruto del paso 1 es un[m
+[31m-superconjunto del ranking final del paso 2 para un N suficientemente[m
+[31m-holgado. Ver MotorBusqueda para el detalle de implementacion.[m
+[31m-[m
+[31m-El score combinado se atenua cuando la marca consultada y la candidata no[m
+[31m-comparten ninguna clase NCL, reflejando el menor riesgo de confusion entre[m
+[31m-productos o servicios no relacionados (Art. 20 h).[m
+[31m-[m
+[31m-Fix 17-jul-2026: _similitud_fonetica() recibe el texto CRUDO de cada[m
+[31m-denominacion (no la clave fonetica ya fusionada) porque internamente hace[m
+[31m-texto_a.split() para descontar palabras foneticamente comunes palabra por[m
+[31m-palabra. clave_fonetica() elimina los espacios (funde toda la denominacion[m
+[31m-en un solo bloque, ver normalizacion.py), asi que pasarle la clave ya[m
+[31m-calculada dejaba a texto_a como una sola "palabra" para toda marca[m
+[31m-multi-palabra, y el descuento pareado del lado de la consulta nunca se[m
+[31m-activaba correctamente. Antes: buscar() calculaba fonetico_consulta =[m
+[31m-clave_fonetica(consulta) y se lo pasaba a _similitud_fonetica. Ahora se le[m
+[31m-pasa consulta directamente (texto crudo); _similitud_fonetica ya calcula[m
+[31m-clave_fonetica internamente para el score base, y usa el texto crudo solo[m
+[31m-para el split() del descuento pareado.[m
+[31m-"""[m
+[31m-from __future__ import annotations[m
+[31m-[m
+[31m-import logging[m
+[31m-from dataclasses import dataclass[m
+[31m-[m
+[31m-import numpy as np[m
+[31m-from rapidfuzz import fuzz, process[m
+[31m-[m
+[31m-from . import config, normalizacion[m
+[31m-from .indice import IndiceBusqueda[m
+[31m-[m
+[31m-logger = logging.getLogger(__name__)[m
+[31m-[m
+[31m-__all__ = ["Resultado", "MotorBusqueda"][m
+[31m-[m
+[31m-[m
+[31m-@dataclass(frozen=True)[m
+[31m-class Resultado:[m
+[31m-    """Una anterioridad candidata con su desglose de puntajes."""[m
+[31m-    mark_code: int[m
+[31m-    nombre: str[m
+[31m-    clases: list[int][m
+[31m-    solicitudes: list[str][m
+[31m-    score: float                 # combinado, 0-100[m
+[31m-    score_ortografico: float     # 0-100[m
+[31m-    score_fonetico: float        # 0-100[m
+[31m-    clase_relacionada: bool[m
+[31m-[m
+[31m-[m
+[31m-def _palabras_comunes_fuera(a: str, b: str) -> tuple[str, str]:[m
+[31m-    """Quita de cada cadena las palabras exactas que aparecen en ambas."""[m
+[31m-    wa, wb = a.split(), b.split()[m
+[31m-    comunes = set(wa) & set(wb)[m
+[31m-    fa = " ".join(w for w in wa if w not in comunes)[m
+[31m-    fb = " ".join(w for w in wb if w not in comunes)[m
+[31m-    return fa, fb[m
+[31m-[m
+[31m-[m
+[31m-def _similitud_ortografica(a: str, b: str) -> float:[m
+[31m-    """Similitud ortografica 0-100 sobre formas canonicas.[m
+[31m-[m
+[31m-    Usa token_sort_ratio como base (tolera reordenamiento de palabras, ej.[m
+[31m-    'CASA BLANCA' / 'BLANCA CASA'). Para evitar que una palabra generica[m
+[31m-    compartida ('BEER', 'CHILE', etc.) infle el parecido entre marcas cuyo[m
+[31m-    elemento distintivo es en realidad muy distinto, se calcula tambien el[m
+[31m-    score quitando las palabras exactas comunes a ambas marcas y se usa el[m
+[31m-    minimo de los dos. Si quitar las comunes deja una cadena vacia (una[m
+[31m-    marca es subconjunto casi exacto de la otra, ej. 'SKAAL BEER' vs[m
+[31m-    'SKAAL'), no se aplica el castigo: se mantiene el score base.[m
+[31m-[m
+[31m-    Limitacion conocida (aceptada, sin solucion automatica por ahora): esta[m
+[31m-    correccion solo detecta palabras EXACTAMENTE comunes. Si el parecido[m
+[31m-    viene de una palabra generica compartida que no es identica letra por[m
+[31m-    letra (ej. variantes ortograficas de un mismo generico), la inflacion[m
+[31m-    artificial del score no se corrige. Se documenta como error conocido en[m
+[31m-    vez de intentar una heuristica adicional sin evidencia empirica de que[m
+[31m-    sea necesaria.[m
+[31m-    """[m
+[31m-    if not a or not b:[m
+[31m-        return 0.0[m
+[31m-[m
+[31m-    score_base = float(fuzz.token_sort_ratio(a, b))[m
+[31m-[m
+[31m-    if " " not in a and " " not in b:[m
+[31m-        return score_base  # una sola palabra cada una: nada que descontar[m
+[31m-[m
+[31m-    fa, fb = _palabras_comunes_fuera(a, b)[m
+[31m-    if not fa or not fb:[m
+[31m-        return score_base  # una marca es casi subconjunto de la otra[m
+[31m-[m
+[31m-    score_sin_comunes = float(fuzz.token_sort_ratio(fa, fb))[m
+[31m-    return min(score_base, score_sin_comunes)[m
+[31m-[m
+[31m-[m
+[31m-def _similitud_fonetica(texto_a: str, texto_b: str) -> float:[m
+[31m-    """Similitud fonetica 0-100, comparando texto original (no clave ya[m
+[31m-    fusionada) para poder descontar palabras foneticamente comunes.[m
+[31m-[m
+[31m-    Mismo problema que la senal ortografica: una palabra compartida (p. ej.[m
+[31m-    'BEER' en dos marcas de cerveza) infla el ratio aunque el elemento[m
+[31m-    distintivo de cada marca suene distinto. Se descuentan las palabras[m
+[31m-    cuya clave fonetica es identica en ambas marcas antes de comparar.[m
+[31m-[m
+[31m-    IMPORTANTE: texto_a y texto_b deben ser el texto CRUDO de la[m
+[31m-    denominacion (con espacios), no el resultado de clave_fonetica(). Esta[m
+[31m-    funcion calcula la clave fonetica internamente. Si se le pasa una clave[m
+[31m-    ya fusionada, texto_a.split() la trata como una sola palabra y el[m
+[31m-    descuento pareado deja de funcionar correctamente para ese lado de la[m
+[31m-    comparacion (bug corregido el 17-jul-2026 en MotorBusqueda.buscar()).[m
+[31m-[m
+[31m-    Al igual que en _similitud_ortografica, el resultado final es el minimo[m
+[31m-    entre el score base y el score sin las palabras comunes. Sin este[m
+[31m-    minimo, fuzz.ratio(fa, fb) podria en teoria superar a score_base (nada[m
+[31m-    garantiza que acortar dos cadenas suba o baje su ratio de edicion), lo[m
+[31m-    que rompe la invariante de la que depende MotorBusqueda.buscar() para[m
+[31m-    su prefiltro: que el descuento de genericos nunca puede aumentar un[m
+[31m-    score por encima del bruto calculado por cdist (bug corregido[m
+[31m-    03-ago-2026; hasta entonces esta funcion devolvia fuzz.ratio(fa, fb)[m
+[31m-    directamente, sin el minimo, y ese caso no estaba cubierto por tests[m
+[31m-    porque los universos de prueba son mas chicos que[m
+[31m-    config.CANDIDATOS_PREFILTRO).[m
+[31m-    """[m
+[31m-    if not texto_a or not texto_b:[m
+[31m-        return 0.0[m
+[31m-[m
+[31m-    clave_completa_a = normalizacion.clave_fonetica(texto_a)[m
+[31m-    clave_completa_b = normalizacion.clave_fonetica(texto_b)[m
+[31m-    score_base = float(fuzz.ratio(clave_completa_a, clave_completa_b))[m
+[31m-[m
+[31m-    wa, wb = texto_a.split(), texto_b.split()[m
+[31m-    if len(wa) <= 1 and len(wb) <= 1:[m
+[31m-        return score_base  # una sola palabra cada lado: nada que descontar[m
+[31m-[m
+[31m-    claves_a = [normalizacion.clave_fonetica(w) for w in wa][m
+[31m-    claves_b = [normalizacion.clave_fonetica(w) for w in wb][m
+[31m-    comunes = set(claves_a) & set(claves_b)[m
+[31m-[m
+[31m-    fa = " ".join(c for c in claves_a if c not in comunes)[m
+[31m-    fb = " ".join(c for c in claves_b if c not in comunes)[m
+[31m-[m
+[31m-    if not fa or not fb:[m
+[31m-        return score_base  # una marca es subconjunto fonetico de la otra[m
+[31m-[m
+[31m-    score_sin_comunes = float(fuzz.ratio(fa, fb))[m
+[31m-    return min(score_base, score_sin_comunes)[m
+[31m-[m
+[31m-[m
+[31m-class MotorBusqueda:[m
+[31m-    """Motor de busqueda sobre un IndiceBusqueda cargado.[m
+[31m-[m
+[31m-    Estrategia en dos pasos (julio 2026, migracion a cdist):[m
+[31m-[m
+[31m-    1. Prefiltro bruto vectorizado: se calcula un score ortografico y[m
+[31m-       fonetico BRUTO (sin descuento de palabras genericas) contra el[m
+[31m-       universo completo con rapidfuzz.process.cdist, y se toman los[m
+[31m-       config.CANDIDATOS_PREFILTRO mejores por score combinado bruto.[m
+[31m-    2. Recalculo exacto: sobre ese top-N (no sobre las 218.369 marcas) se[m
+[31m-       recalculan los scores con la logica exacta de _similitud_ortografica[m
+[31m-       y _similitud_fonetica (que incluye el descuento de genericos), se[m
+[31m-       aplica el factor de clase NCL y se ordena para devolver el top final.[m
+[31m-[m
+[31m-    El paso 1 es una cota superior segura del paso 2: descontar palabras[m
+[31m-    genericas solo puede bajar un score, nunca subirlo, asi que ningun[m
+[31m-    candidato relevante puede quedar fuera del top-N bruto para un N[m
+[31m-    suficientemente holgado frente a config.TOP_RESULTADOS.[m
+[31m-    """[m
+[31m-[m
+[31m-    def __init__(self, indice: IndiceBusqueda) -> None:[m
+[31m-        self.indice = indice[m
+[31m-[m
+[31m-    def buscar([m
+[31m-        self,[m
+[31m-        consulta: str,[m
+[31m-        clases_consulta: list[int] | None = None,[m
+[31m-        top: int = config.TOP_RESULTADOS,[m
+[31m-    ) -> list[Resultado]:[m
+[31m-        """Busca anterioridades similares a la denominacion consultada.[m
+[31m-[m
+[31m-        Compara la consulta contra el universo COMPLETO de marcas oponibles[m
+[31m-        cargado en self.indice, vectorizado con cdist (ver docstring de la[m
+[31m-        clase para el detalle del prefiltro + recalculo exacto).[m
+[31m-[m
+[31m-        Args:[m
+[31m-            consulta: denominacion de la marca solicitada (texto crudo).[m
+[31m-            clases_consulta: clases NCL de la solicitud; si se entregan, se usan[m
+[31m-                para modular el score por relacion de clase.[m
+[31m-            top: numero de resultados a devolver.[m
+[31m-[m
+[31m-        Returns:[m
+[31m-            Lista de Resultado ordenada por score combinado descendente.[m
+[31m-        """[m
+[31m-        idx = self.indice[m
+[31m-        n = len(idx)[m
+[31m-        if n == 0:[m
+[31m-            return [][m
+[31m-[m
+[31m-        canonico = normalizacion.limpiar(consulta)[m
+[31m-        clave_fonetica_consulta = normalizacion.clave_fonetica(consulta)[m
+[31m-        clases_consulta = clases_consulta or [][m
+[31m-        set_clases = {int(c) for c in clases_consulta}[m
+[31m-[m
+[31m-        # --- Paso 1: scoring bruto vectorizado (sin descuento de genericos) ---[m
+[31m-        s_ort_bruto = process.cdist([m
+[31m-            [canonico], idx.canonicos, scorer=fuzz.token_sort_ratio,[m
+[31m-        )[0][m
+[31m-        s_fon_bruto = process.cdist([m
+[31m-            [clave_fonetica_consulta], idx.foneticos, scorer=fuzz.ratio,[m
+[31m-        )[0][m
+[31m-[m
+[31m-        combinado_bruto = ([m
+[31m-            config.PESO_ORTOGRAFICO * s_ort_bruto[m
+[31m-            + config.PESO_FONETICO * s_fon_bruto[m
+[31m-        )[m
+[31m-[m
+[31m-        n_prefiltro = min(config.CANDIDATOS_PREFILTRO, n)[m
+[31m-        # argpartition es O(n): mas rapido que ordenar todo el universo cuando[m
+[31m-        # solo necesitamos los n_prefiltro mejores, sin garantia de orden interno.[m
+[31m-        indices_top = np.argpartition(-combinado_bruto, n_prefiltro - 1)[:n_prefiltro][m
+[31m-[m
+[31m-        # --- Paso 2: recalculo exacto (con descuento de genericos) sobre el top-N ---[m
+[31m-        resultados: list[Resultado] = [][m
+[31m-        for i in indices_top:[m
+[31m-            i = int(i)[m
+[31m-            cand_canonico = idx.canonicos[i][m
+[31m-[m
+[31m-            s_ort = _similitud_ortografica(canonico, cand_canonico)[m
+[31m-            # Se pasa 'consulta' cruda (no clave_fonetica(consulta)): ver[m
+[31m-            # docstring de _similitud_fonetica y nota de fix mas arriba.[m
+[31m-            s_fon = _similitud_fonetica(consulta, idx.nombres[i])[m
+[31m-[m
+[31m-            combinado = ([m
+[31m-                config.PESO_ORTOGRAFICO * s_ort[m
+[31m-                + config.PESO_FONETICO * s_fon[m
+[31m-            )[m
+[31m-[m
+[31m-            clases_cand = [int(c) for c in idx.clases[i]][m
+[31m-            relacionada = bool(set_clases & set(clases_cand)) if set_clases else True[m
+[31m-            if set_clases and not relacionada:[m
+[31m-                combinado *= config.FACTOR_CLASE_NO_RELACIONADA[m
+[31m-[m
+[31m-            resultados.append(Resultado([m
+[31m-                mark_code=int(idx.mark_codes[i]),[m
+[31m-                nombre=str(idx.nombres[i]),[m
+[31m-                clases=clases_cand,[m
+[31m-                solicitudes=list(idx.solicitudes[i]),[m
+[31m-                score=round(combinado, 2),[m
+[31m-                score_ortografico=round(s_ort, 2),[m
+[31m-                score_fonetico=round(s_fon, 2),[m
+[31m-                clase_relacionada=relacionada,[m
+[31m-            ))[m
+[31m-[m
+[31m-        resultados.sort(key=lambda r: r.score, reverse=True)[m
+[32m+[m[32m"""Motor de busqueda de anterioridades por similitud denominativa.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mDada una denominacion consultada, se compara contra el UNIVERSO COMPLETO de[m[41m[m
+[32m+[m[32mmarcas oponibles combinando dos senales:[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m  - ortografica (rapidfuzz sobre la forma canonica)[m[41m[m
+[32m+[m[32m  - fonetica    (rapidfuzz sobre la clave fonetica espanol-Chile)[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mDecision de julio 2026: se retiro la senal semantica del motor (embeddings +[m[41m[m
+[32m+[m[32mFAISS) por decision de negocio.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mMigracion a cdist (julio 2026, produccion con universo completo): el primer[m[41m[m
+[32m+[m[32mdiseno post-FAISS comparaba la consulta contra las ~218.369 marcas con un[m[41m[m
+[32m+[m[32mloop puro en Python (uno por candidato), lo que tomaba ~13s por consulta.[m[41m[m
+[32m+[m[32mSe migro a una estrategia en dos pasos, vectorizada con[m[41m[m
+[32m+[m[32mrapidfuzz.process.cdist (implementado en C++):[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m  1. Prefiltro bruto: cdist calcula scores ortografico y fonetico SIN el[m[41m[m
+[32m+[m[32m     descuento de palabras genericas contra el universo completo en un solo[m[41m[m
+[32m+[m[32m     llamado vectorizado, y se toman los config.CANDIDATOS_PREFILTRO mejores[m[41m[m
+[32m+[m[32m     candidatos por score combinado bruto.[m[41m[m
+[32m+[m[32m  2. Recalculo exacto: solo sobre ese top-N (no sobre las 218.369 marcas) se[m[41m[m
+[32m+[m[32m     aplica la logica exacta con descuento de genericos y el factor de[m[41m[m
+[32m+[m[32m     clase NCL, y se ordena para devolver el top final.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mEsta division es segura porque descontar palabras genericas solo puede[m[41m[m
+[32m+[m[32mREDUCIR un score, nunca subirlo: el ranking bruto del paso 1 es un[m[41m[m
+[32m+[m[32msuperconjunto del ranking final del paso 2 para un N suficientemente[m[41m[m
+[32m+[m[32mholgado. Ver MotorBusqueda para el detalle de implementacion.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mEl score combinado se atenua cuando la marca consultada y la candidata no[m[41m[m
+[32m+[m[32mcomparten ninguna clase NCL, reflejando el menor riesgo de confusion entre[m[41m[m
+[32m+[m[32mproductos o servicios no relacionados (Art. 20 h).[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mFix 17-jul-2026: _similitud_fonetica() recibe el texto CRUDO de cada[m[41m[m
+[32m+[m[32mdenominacion (no la clave fonetica ya fusionada) porque internamente hace[m[41m[m
+[32m+[m[32mtexto_a.split() para descontar palabras foneticamente comunes palabra por[m[41m[m
+[32m+[m[32mpalabra. clave_fonetica() elimina los espacios (funde toda la denominacion[m[41m[m
+[32m+[m[32men un solo bloque, ver normalizacion.py), asi que pasarle la clave ya[m[41m[m
+[32m+[m[32mcalculada dejaba a texto_a como una sola "palabra" para toda marca[m[41m[m
+[32m+[m[32mmulti-palabra, y el descuento pareado del lado de la consulta nunca se[m[41m[m
+[32m+[m[32mactivaba correctamente. Antes: buscar() calculaba fonetico_consulta =[m[41m[m
+[32m+[m[32mclave_fonetica(consulta) y se lo pasaba a _similitud_fonetica. Ahora se le[m[41m[m
+[32m+[m[32mpasa consulta directamente (texto crudo); _similitud_fonetica ya calcula[m[41m[m
+[32m+[m[32mclave_fonetica internamente para el score base, y usa el texto crudo solo[m[41m[m
+[32m+[m[32mpara el split() del descuento pareado.[m[41m[m
+[32m+[m[32m"""[m[41m[m
+[32m+[m[32mfrom __future__ import annotations[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mimport logging[m[41m[m
+[32m+[m[32mfrom dataclasses import dataclass[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mimport numpy as np[m[41m[m
+[32m+[m[32mfrom rapidfuzz import fuzz, process[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mfrom . import config, normalizacion[m[41m[m
+[32m+[m[32mfrom .indice import IndiceBusqueda[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mlogger = logging.getLogger(__name__)[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m__all__ = ["Resultado", "MotorBusqueda"][m[41m[m
+[32m+[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m@dataclass(frozen=True)[m[41m[m
+[32m+[m[32mclass Resultado:[m[41m[m
+[32m+[m[32m    """Una anterioridad candidata con su desglose de puntajes."""[m[41m[m
+[32m+[m[32m    mark_code: int[m[41m[m
+[32m+[m[32m    nombre: str[m[41m[m
+[32m+[m[32m    clases: list[int][m[41m[m
+[32m+[m[32m    solicitudes: list[str][m[41m[m
+[32m+[m[32m    score: float                 # combinado, 0-100[m[41m[m
+[32m+[m[32m    score_ortografico: float     # 0-100[m[41m[m
+[32m+[m[32m    score_fonetico: float        # 0-100[m[41m[m
+[32m+[m[32m    clase_relacionada: bool[m[41m[m
+[32m+[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mdef _palabras_comunes_fuera(a: str, b: str) -> tuple[str, str]:[m[41m[m
+[32m+[m[32m    """Quita de cada cadena las palabras exactas que aparecen en ambas."""[m[41m[m
+[32m+[m[32m    wa, wb = a.split(), b.split()[m[41m[m
+[32m+[m[32m    comunes = set(wa) & set(wb)[m[41m[m
+[32m+[m[32m    fa = " ".join(w for w in wa if w not in comunes)[m[41m[m
+[32m+[m[32m    fb = " ".join(w for w in wb if w not in comunes)[m[41m[m
+[32m+[m[32m    return fa, fb[m[41m[m
+[32m+[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mdef _similitud_ortografica(a: str, b: str) -> float:[m[41m[m
+[32m+[m[32m    """Similitud ortografica 0-100 sobre formas canonicas.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    Usa token_sort_ratio como base (tolera reordenamiento de palabras, ej.[m[41m[m
+[32m+[m[32m    'CASA BLANCA' / 'BLANCA CASA'). Para evitar que una palabra generica[m[41m[m
+[32m+[m[32m    compartida ('BEER', 'CHILE', etc.) infle el parecido entre marcas cuyo[m[41m[m
+[32m+[m[32m    elemento distintivo es en realidad muy distinto, se calcula tambien el[m[41m[m
+[32m+[m[32m    score quitando las palabras exactas comunes a ambas marcas y se usa el[m[41m[m
+[32m+[m[32m    minimo de los dos. Si quitar las comunes deja una cadena vacia (una[m[41m[m
+[32m+[m[32m    marca es subconjunto casi exacto de la otra, ej. 'SKAAL BEER' vs[m[41m[m
+[32m+[m[32m    'SKAAL'), no se aplica el castigo: se mantiene el score base.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    Limitacion conocida (aceptada, sin solucion automatica por ahora): esta[m[41m[m
+[32m+[m[32m    correccion solo detecta palabras EXACTAMENTE comunes. Si el parecido[m[41m[m
+[32m+[m[32m    viene de una palabra generica compartida que no es identica letra por[m[41m[m
+[32m+[m[32m    letra (ej. variantes ortograficas de un mismo generico), la inflacion[m[41m[m
+[32m+[m[32m    artificial del score no se corrige. Se documenta como error conocido en[m[41m[m
+[32m+[m[32m    vez de intentar una heuristica adicional sin evidencia empirica de que[m[41m[m
+[32m+[m[32m    sea necesaria.[m[41m[m
+[32m+[m[32m    """[m[41m[m
+[32m+[m[32m    if not a or not b:[m[41m[m
+[32m+[m[32m        return 0.0[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    score_base = float(fuzz.token_sort_ratio(a, b))[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    if " " not in a and " " not in b:[m[41m[m
+[32m+[m[32m        return score_base  # una sola palabra cada una: nada que descontar[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    fa, fb = _palabras_comunes_fuera(a, b)[m[41m[m
+[32m+[m[32m    if not fa or not fb:[m[41m[m
+[32m+[m[32m        return score_base  # una marca es casi subconjunto de la otra[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    score_sin_comunes = float(fuzz.token_sort_ratio(fa, fb))[m[41m[m
+[32m+[m[32m    return min(score_base, score_sin_comunes)[m[41m[m
+[32m+[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mdef _similitud_fonetica(texto_a: str, texto_b: str) -> float:[m[41m[m
+[32m+[m[32m    """Similitud fonetica 0-100, comparando texto original (no clave ya[m[41m[m
+[32m+[m[32m    fusionada) para poder descontar palabras foneticamente comunes.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    Mismo problema que la senal ortografica: una palabra compartida (p. ej.[m[41m[m
+[32m+[m[32m    'BEER' en dos marcas de cerveza) infla el ratio aunque el elemento[m[41m[m
+[32m+[m[32m    distintivo de cada marca suene distinto. Se descuentan las palabras[m[41m[m
+[32m+[m[32m    cuya clave fonetica es identica en ambas marcas antes de comparar.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    IMPORTANTE: texto_a y texto_b deben ser el texto CRUDO de la[m[41m[m
+[32m+[m[32m    denominacion (con espacios), no el resultado de clave_fonetica(). Esta[m[41m[m
+[32m+[m[32m    funcion calcula la clave fonetica internamente. Si se le pasa una clave[m[41m[m
+[32m+[m[32m    ya fusionada, texto_a.split() la trata como una sola palabra y el[m[41m[m
+[32m+[m[32m    descuento pareado deja de funcionar correctamente para ese lado de la[m[41m[m
+[32m+[m[32m    comparacion (bug corregido el 17-jul-2026 en MotorBusqueda.buscar()).[m[41m[m
+[32m+[m[32m    """[m[41m[m
+[32m+[m[32m    if not texto_a or not texto_b:[m[41m[m
+[32m+[m[32m        return 0.0[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    clave_completa_a = normalizacion.clave_fonetica(texto_a)[m[41m[m
+[32m+[m[32m    clave_completa_b = normalizacion.clave_fonetica(texto_b)[m[41m[m
+[32m+[m[32m    score_base = float(fuzz.ratio(clave_completa_a, clave_completa_b))[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    wa, wb = texto_a.split(), texto_b.split()[m[41m[m
+[32m+[m[32m    if len(wa) <= 1 and len(wb) <= 1:[m[41m[m
+[32m+[m[32m        return score_base  # una sola palabra cada lado: nada que descontar[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    claves_a = [normalizacion.clave_fonetica(w) for w in wa][m[41m[m
+[32m+[m[32m    claves_b = [normalizacion.clave_fonetica(w) for w in wb][m[41m[m
+[32m+[m[32m    comunes = set(claves_a) & set(claves_b)[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    fa = " ".join(c for c in claves_a if c not in comunes)[m[41m[m
+[32m+[m[32m    fb = " ".join(c for c in claves_b if c not in comunes)[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    if not fa or not fb:[m[41m[m
+[32m+[m[32m        return score_base  # una marca es subconjunto fonetico de la otra[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    return float(fuzz.ratio(fa, fb))[m[41m[m
+[32m+[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mclass MotorBusqueda:[m[41m[m
+[32m+[m[32m    """Motor de busqueda sobre un IndiceBusqueda cargado.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    Estrategia en dos pasos (julio 2026, migracion a cdist):[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    1. Prefiltro bruto vectorizado: se calcula un score ortografico y[m[41m[m
+[32m+[m[32m       fonetico BRUTO (sin descuento de palabras genericas) contra el[m[41m[m
+[32m+[m[32m       universo completo con rapidfuzz.process.cdist, y se toman los[m[41m[m
+[32m+[m[32m       config.CANDIDATOS_PREFILTRO mejores por score combinado bruto.[m[41m[m
+[32m+[m[32m    2. Recalculo exacto: sobre ese top-N (no sobre las 218.369 marcas) se[m[41m[m
+[32m+[m[32m       recalculan los scores con la logica exacta de _similitud_ortografica[m[41m[m
+[32m+[m[32m       y _similitud_fonetica (que incluye el descuento de genericos), se[m[41m[m
+[32m+[m[32m       aplica el factor de clase NCL y se ordena para devolver el top final.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    El paso 1 es una cota superior segura del paso 2: descontar palabras[m[41m[m
+[32m+[m[32m    genericas solo puede bajar un score, nunca subirlo, asi que ningun[m[41m[m
+[32m+[m[32m    candidato relevante puede quedar fuera del top-N bruto para un N[m[41m[m
+[32m+[m[32m    suficientemente holgado frente a config.TOP_RESULTADOS.[m[41m[m
+[32m+[m[32m    """[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    def __init__(self, indice: IndiceBusqueda) -> None:[m[41m[m
+[32m+[m[32m        self.indice = indice[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m    def buscar([m[41m[m
+[32m+[m[32m        self,[m[41m[m
+[32m+[m[32m        consulta: str,[m[41m[m
+[32m+[m[32m        clases_consulta: list[int] | None = None,[m[41m[m
+[32m+[m[32m        top: int = config.TOP_RESULTADOS,[m[41m[m
+[32m+[m[32m    ) -> list[Resultado]:[m[41m[m
+[32m+[m[32m        """Busca anterioridades similares a la denominacion consultada.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m        Compara la consulta contra el universo COMPLETO de marcas oponibles[m[41m[m
+[32m+[m[32m        cargado en self.indice, vectorizado con cdist (ver docstring de la[m[41m[m
+[32m+[m[32m        clase para el detalle del prefiltro + recalculo exacto).[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m        Args:[m[41m[m
+[32m+[m[32m            consulta: denominacion de la marca solicitada (texto crudo).[m[41m[m
+[32m+[m[32m            clases_consulta: clases NCL de la solicitud; si se entregan, se usan[m[41m[m
+[32m+[m[32m                para modular el score por relacion de clase.[m[41m[m
+[32m+[m[32m            top: numero de resultados a devolver.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m        Returns:[m[41m[m
+[32m+[m[32m            Lista de Resultado ordenada por score combinado descendente.[m[41m[m
+[32m+[m[32m        """[m[41m[m
+[32m+[m[32m        idx = self.indice[m[41m[m
+[32m+[m[32m        n = len(idx)[m[41m[m
+[32m+[m[32m        if n == 0:[m[41m[m
+[32m+[m[32m            return [][m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m        canonico = normalizacion.limpiar(consulta)[m[41m[m
+[32m+[m[32m        clave_fonetica_consulta = normalizacion.clave_fonetica(consulta)[m[41m[m
+[32m+[m[32m        clases_consulta = clases_consulta or [][m[41m[m
+[32m+[m[32m        set_clases = {int(c) for c in clases_consulta}[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m        # --- Paso 1: scoring bruto vectorizado (sin descuento de genericos) ---[m[41m[m
+[32m+[m[32m        s_ort_bruto = process.cdist([m[41m[m
+[32m+[m[32m            [canonico], idx.canonicos, scorer=fuzz.token_sort_ratio,[m[41m[m
+[32m+[m[32m        )[0][m[41m[m
+[32m+[m[32m        s_fon_bruto = process.cdist([m[41m[m
+[32m+[m[32m            [clave_fonetica_consulta], idx.foneticos, scorer=fuzz.ratio,[m[41m[m
+[32m+[m[32m        )[0][m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m        combinado_bruto = ([m[41m[m
+[32m+[m[32m            config.PESO_ORTOGRAFICO * s_ort_bruto[m[41m[m
+[32m+[m[32m            + config.PESO_FONETICO * s_fon_bruto[m[41m[m
+[32m+[m[32m        )[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m        n_prefiltro = min(config.CANDIDATOS_PREFILTRO, n)[m[41m[m
+[32m+[m[32m        # argpartition es O(n): mas rapido que ordenar todo el universo cuando[m[41m[m
+[32m+[m[32m        # solo necesitamos los n_prefiltro mejores, sin garantia de orden interno.[m[41m[m
+[32m+[m[32m        indices_top = np.argpartition(-combinado_bruto, n_prefiltro - 1)[:n_prefiltro][m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m        # --- Paso 2: recalculo exacto (con descuento de genericos) sobre el top-N ---[m[41m[m
+[32m+[m[32m        resultados: list[Resultado] = [][m[41m[m
+[32m+[m[32m        for i in indices_top:[m[41m[m
+[32m+[m[32m            i = int(i)[m[41m[m
+[32m+[m[32m            cand_canonico = idx.canonicos[i][m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m            s_ort = _similitud_ortografica(canonico, cand_canonico)[m[41m[m
+[32m+[m[32m            # Se pasa 'consulta' cruda (no clave_fonetica(consulta)): ver[m[41m[m
+[32m+[m[32m            # docstring de _similitud_fonetica y nota de fix mas arriba.[m[41m[m
+[32m+[m[32m            s_fon = _similitud_fonetica(consulta, idx.nombres[i])[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m            combinado = ([m[41m[m
+[32m+[m[32m                config.PESO_ORTOGRAFICO * s_ort[m[41m[m
+[32m+[m[32m                + config.PESO_FONETICO * s_fon[m[41m[m
+[32m+[m[32m            )[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m            clases_cand = [int(c) for c in idx.clases[i]][m[41m[m
+[32m+[m[32m            relacionada = bool(set_clases & set(clases_cand)) if set_clases else True[m[41m[m
+[32m+[m[32m            if set_clases and not relacionada:[m[41m[m
+[32m+[m[32m                combinado *= config.FACTOR_CLASE_NO_RELACIONADA[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m            resultados.append(Resultado([m[41m[m
+[32m+[m[32m                mark_code=int(idx.mark_codes[i]),[m[41m[m
+[32m+[m[32m                nombre=str(idx.nombres[i]),[m[41m[m
+[32m+[m[32m                clases=clases_cand,[m[41m[m
+[32m+[m[32m                solicitudes=list(idx.solicitudes[i]),[m[41m[m
+[32m+[m[32m                score=round(combinado, 2),[m[41m[m
+[32m+[m[32m                score_ortografico=round(s_ort, 2),[m[41m[m
+[32m+[m[32m                score_fonetico=round(s_fon, 2),[m[41m[m
+[32m+[m[32m                clase_relacionada=relacionada,[m[41m[m
+[32m+[m[32m            ))[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m        resultados.sort(key=lambda r: r.score, reverse=True)[m[41m[m
+         return resultados[:top][m
+\ No newline at end of file[m
+[1mdiff --git a/buscador/config.py b/buscador/config.py[m
+[1mindex 9898102..a2d8a64 100644[m
+[1m--- a/buscador/config.py[m
+[1m+++ b/buscador/config.py[m
+[36m@@ -1,76 +1,78 @@[m
+[31m-"""Configuracion central del buscador de anterioridades de INAPI.[m
+[31m-[m
+[31m-Toda constante de operacion (rutas, esquema de columnas, criterio de[m
+[31m-oponibilidad, parametros del motor) vive aqui y en ningun otro lugar. El[m
+[31m-codigo de produccion importa desde este modulo; no se redefinen rutas ni[m
+[31m-nombres de columna en otros archivos.[m
+[31m-"""[m
+[31m-from __future__ import annotations[m
+[31m-[m
+[31m-from pathlib import Path[m
+[31m-[m
+[31m-# --- Rutas -----------------------------------------------------------------[m
+[31m-RAIZ: Path = Path(__file__).resolve().parent.parent[m
+[31m-DATA_DIR: Path = RAIZ / "data"[m
+[31m-[m
+[31m-ARCHIVO_MARCAS: Path = DATA_DIR / "Datos Marcas.xlsx"   # ajustar extension si corresponde[m
+[31m-MARCAS_PROCESADAS: Path = DATA_DIR / "marcas_oponibles.parquet"[m
+[31m-[m
+[31m-# --- Criterio de oponibilidad ---------------------------------------------[m
+[31m-# Estados de 'Status Name' considerados anterioridad oponible (marca viva).[m
+[31m-# Decision de dominio fundada en los estados que los examinadores citaron[m
+[31m-# efectivamente como anterioridad en las observaciones M10 de 2025.[m
+[31m-# Se excluyen estados de marca extinta (rechazada, abandonada, desistida,[m
+[31m-# cancelada), aunque aparezcan citados: en su momento estaban vivas, hoy no[m
+[31m-# son oponibles.[m
+[31m-ESTADOS_OPONIBLES: frozenset[str] = frozenset({[m
+[31m-    "Registrada",[m
+[31m-    "Aguardando por renovación de marca nacional",[m
+[31m-    "Aguardando que resolución de aceptación parcial a registro quede en firme",[m
+[31m-    "Aguardando que resolución de aceptación a registro sea publicada",[m
+[31m-    "Aguardando que fallo de aceptación a registro quede en firme",[m
+[31m-    "Aguardando que fallo de aceptación parcial a registro quede en firme",[m
+[31m-})[m
+[31m-# --- Esquema del archivo de origen ----------------------------------------[m
+[31m-COL_MARK_CODE: str = "Mark Code (Ip Name)"[m
+[31m-COL_NOMBRE: str = "Mark Name"[m
+[31m-COL_CLASE: str = "Nice Class Code"[m
+[31m-COL_NRO_SOL: str = "Nro_sol"[m
+[31m-COL_STATUS: str = "Status Name"[m
+[31m-[m
+[31m-# Columnas que el archivo de origen DEBE contener para ser procesable.[m
+[31m-COLUMNAS_REQUERIDAS: tuple[str, ...] = ([m
+[31m-    COL_MARK_CODE,[m
+[31m-    COL_NOMBRE,[m
+[31m-    COL_CLASE,[m
+[31m-    COL_NRO_SOL,[m
+[31m-    COL_STATUS,[m
+[31m-)[m
+[31m-[m
+[31m-# --- Parametros del motor de busqueda -------------------------------------[m
+[31m-# Pesos de las dos senales al combinar (deben sumar 1.0).[m
+[31m-# La senal semantica fue retirada del motor por decision de negocio (reunion[m
+[31m-# julio 2026): el riesgo de confusion marcaria se evalua exclusivamente por[m
+[31m-# parecido grafico y fonetico, que es ademas el criterio que usa el[m
+[31m-# examinador real. Se mantiene la proporcion relativa que tenian ortografico[m
+[31m-# y fonetico cuando existia la tercera senal (0.55 / 0.40 -> reescalado a[m
+[31m-# suma 1.0).[m
+[31m-PESO_ORTOGRAFICO: float = 0.58[m
+[31m-PESO_FONETICO: float = 0.42[m
+[31m-[m
+[31m-# Resultados finales devueltos por consulta.[m
+[31m-TOP_RESULTADOS: int = 10[m
+[31m-[m
+[31m-# Umbral de relacion de clase NCL: si las marcas no comparten clase, el score[m
+[31m-# combinado se atenua por este factor (clases no relacionadas = menor riesgo).[m
+[31m-FACTOR_CLASE_NO_RELACIONADA: float = 0.7[m
+[31m-[m
+[31m-# --- Pre-filtro vectorizado (cdist) ---------------------------------------[m
+[31m-# Decision de julio 2026: el motor calcula un score bruto (sin descuento de[m
+[31m-# palabras genericas) contra el universo completo usando rapidfuzz.process.cdist[m
+[31m-# (vectorizado en C++). Solo se recalcula el score exacto (con descuento de[m
+[31m-# genericos) sobre este top-N de candidatos brutos, no sobre las 218.369 marcas.[m
+[31m-# Justificacion: descontar palabras genericas solo puede REDUCIR el score de un[m
+[31m-# par (nunca aumentarlo), por lo que el ranking bruto es un superconjunto seguro[m
+[31m-# del ranking final para un N suficientemente holgado frente a TOP_RESULTADOS.[m
+[32m+[m[32m"""Configuracion central del buscador de anterioridades de INAPI.[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mToda constante de operacion (rutas, esquema de columnas, criterio de[m[41m[m
+[32m+[m[32moponibilidad, parametros del motor) vive aqui y en ningun otro lugar. El[m[41m[m
+[32m+[m[32mcodigo de produccion importa desde este modulo; no se redefinen rutas ni[m[41m[m
+[32m+[m[32mnombres de columna en otros archivos.[m[41m[m
+[32m+[m[32m"""[m[41m[m
+[32m+[m[32mfrom __future__ import annotations[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mfrom pathlib import Path[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m# --- Rutas -----------------------------------------------------------------[m[41m[m
+[32m+[m[32mRAIZ: Path = Path(__file__).resolve().parent.parent[m[41m[m
+[32m+[m[32mDATA_DIR: Path = RAIZ / "data"[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32mARCHIVO_MARCAS: Path = DATA_DIR / "Datos Marcas.xlsx"   # ajustar extension si corresponde[m[41m[m
+[32m+[m[32mMARCAS_PROCESADAS: Path = DATA_DIR / "marcas_oponibles.parquet"[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m# --- Criterio de oponibilidad ---------------------------------------------[m[41m[m
+[32m+[m[32m# Estados de 'Status Name' considerados anterioridad oponible (marca viva).[m[41m[m
+[32m+[m[32m# Decision de dominio fundada en los estados que los examinadores citaron[m[41m[m
+[32m+[m[32m# efectivamente como anterioridad en las observaciones M10 de 2025.[m[41m[m
+[32m+[m[32m# Se excluyen estados de marca extinta (rechazada, abandonada, desistida,[m[41m[m
+[32m+[m[32m# cancelada), aunque aparezcan citados: en su momento estaban vivas, hoy no[m[41m[m
+[32m+[m[32m# son oponibles.[m[41m[m
+[32m+[m[32mESTADOS_OPONIBLES: frozenset[str] = frozenset({[m[41m[m
+[32m+[m[32m    "Registrada",[m[41m[m
+[32m+[m[32m    "Aguardando por renovación de marca nacional",[m[41m[m
+[32m+[m[32m    "Aguardando que resolución de aceptación parcial a registro quede en firme",[m[41m[m
+[32m+[m[32m    "Aguardando que resolución de aceptación a registro sea publicada",[m[41m[m
+[32m+[m[32m    "Aguardando que fallo de aceptación a registro quede en firme",[m[41m[m
+[32m+[m[32m    "Aguardando que fallo de aceptación parcial a registro quede en firme",[m[41m[m
+[32m+[m[32m})[m[41m[m
+[32m+[m[32m# --- Esquema del archivo de origen ----------------------------------------[m[41m[m
+[32m+[m[32mCOL_MARK_CODE: str = "Mark Code (Ip Name)"[m[41m[m
+[32m+[m[32mCOL_NOMBRE: str = "Mark Name"[m[41m[m
+[32m+[m[32mCOL_CLASE: str = "Nice Class Code"[m[41m[m
+[32m+[m[32mCOL_NRO_SOL: str = "Nro_sol"[m[41m[m
+[32m+[m[32mCOL_STATUS: str = "Status Name"[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m# Columnas que el archivo de origen DEBE contener para ser procesable.[m[41m[m
+[32m+[m[32mCOLUMNAS_REQUERIDAS: tuple[str, ...] = ([m[41m[m
+[32m+[m[32m    COL_MARK_CODE,[m[41m[m
+[32m+[m[32m    COL_NOMBRE,[m[41m[m
+[32m+[m[32m    COL_CLASE,[m[41m[m
+[32m+[m[32m    COL_NRO_SOL,[m[41m[m
+[32m+[m[32m    COL_STATUS,[m[41m[m
+[32m+[m[32m)[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m# --- Parametros del motor de busqueda -------------------------------------[m[41m[m
+[32m+[m[32m# Pesos de las dos senales al combinar (deben sumar 1.0).[m[41m[m
+[32m+[m[32m# La senal semantica fue retirada del motor por decision de negocio (reunion[m[41m[m
+[32m+[m[32m# julio 2026): el riesgo de confusion marcaria se evalua exclusivamente por[m[41m[m
+[32m+[m[32m# parecido grafico y fonetico, que es ademas el criterio que usa el[m[41m[m
+[32m+[m[32m# examinador real. Se mantiene la proporcion relativa que tenian ortografico[m[41m[m
+[32m+[m[32m# y fonetico cuando existia la tercera senal (0.55 / 0.40 -> reescalado a[m[41m[m
+[32m+[m[32m# suma 1.0).[m[41m[m
+[32m+[m[32mPESO_ORTOGRAFICO: float = 0.58[m[41m[m
+[32m+[m[32mPESO_FONETICO: float = 0.42[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m# Resultados finales devueltos por consulta.[m[41m[m
+[32m+[m[32mTOP_RESULTADOS: int = 10[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m# Umbral de relacion de clase NCL: si las marcas no comparten clase, el score[m[41m[m
+[32m+[m[32m# combinado se atenua por este factor (clases no relacionadas = menor riesgo).[m[41m[m
+[32m+[m[32mFACTOR_CLASE_NO_RELACIONADA: float = 0.7[m[41m[m
+[32m+[m[41m[m
+[32m+[m[32m# --- Pre-filtro vectorizado (cdist) ---------------------------------------[m[41m[m
+[32m+[m[32m# Decision de julio 2026: el motor calcula un score bruto (sin descuento de[m[41m[m
+[32m+[m[32m# palabras genericas) contra el universo completo usando rapidfuzz.process.cdist[m[41m[m
+[32m+[m[32m# (vectorizado en C++). Solo se recalcula el score exacto (con descuento de[m[41m[m
+[32m+[m[32m# genericos) sobre este top-N de candidatos brutos, no sobre las 218.369 marcas.[m[41m[m
+[32m+[m[32m# Justificacion: descontar palabras genericas solo puede REDUCIR el score de un[m[41m[m
+[32m+[m[32m# par (nunca aumentarlo), por lo que el ranking bruto es un superconjunto seguro[m[41m[m
+[32m+[m[32m# del ranking final para un N suficientemente holgado frente a TOP_RESULTADOS.[m[41m[m
+[32m+[m[32m# No confundir con el extinto CANDIDATOS_FAISS (recuperacion semantica, ya[m[41m[m
+[32m+[m[32m# retirada): este prefiltro es puramente ortografico/fonetico y determinista.[m[41m[m
+ CANDIDATOS_PREFILTRO: int = 200[m
+\ No newline at end of file[m
