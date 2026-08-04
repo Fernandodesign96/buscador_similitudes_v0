@@ -73,6 +73,4 @@ FACTOR_CLASE_NO_RELACIONADA: float = 0.7
 # Justificacion: descontar palabras genericas solo puede REDUCIR el score de un
 # par (nunca aumentarlo), por lo que el ranking bruto es un superconjunto seguro
 # del ranking final para un N suficientemente holgado frente a TOP_RESULTADOS.
-# No confundir con el extinto CANDIDATOS_FAISS (recuperacion semantica, ya
-# retirada): este prefiltro es puramente ortografico/fonetico y determinista.
 CANDIDATOS_PREFILTRO: int = 200

@@ -13,9 +13,12 @@ existe en el codigo de produccion.
 """
 from __future__ import annotations
 
-import pytest
+import random
 
-from buscador import normalizacion
+import pytest
+from rapidfuzz import fuzz
+
+from buscador import config, normalizacion
 from buscador.busqueda import MotorBusqueda
 from buscador.busqueda import _similitud_fonetica
 from buscador.busqueda import _similitud_ortografica
@@ -144,3 +147,67 @@ def test_subconjunto_fonetico_no_se_castiga():
 
 def test_homofono_sigue_dando_score_alto():
     assert _similitud_fonetica("cauquenes", "kaukenes") == 100.0
+
+
+def test_similitud_fonetica_nunca_supera_el_score_bruto():
+    """El descuento de palabras comunes no puede subir el score por encima
+    del que calcularia cdist sobre el texto completo (sin descuento).
+
+    Este es el invariante del que depende el prefiltro de dos etapas en
+    MotorBusqueda.buscar(): si _similitud_fonetica pudiera superar el score
+    bruto, un candidato real podria quedar fuera del top-N del prefiltro y
+    nunca llegar al recalculo exacto (bug corregido el 03-ago-2026, antes
+    de este fix la funcion no aplicaba min() como si hace
+    _similitud_ortografica). Se prueba con pares generados al azar (mezcla
+    de palabras y letras) para no depender solo de los ejemplos de mano
+    usados en los demas tests.
+    """
+    random.seed(0)
+    letras = "abcdefghijklmnopqrstuvwxyz"
+    palabras_base = ["beer", "chile", "casa", "blanca", "sol", "mar", "kids"]
+
+    def marca_al_azar():
+        n_palabras = random.randint(1, 3)
+        palabras = []
+        for _ in range(n_palabras):
+            if random.random() < 0.5:
+                palabras.append(random.choice(palabras_base))
+            else:
+                largo = random.randint(3, 8)
+                palabras.append("".join(random.choice(letras) for _ in range(largo)))
+        return " ".join(palabras)
+
+    for _ in range(200):
+        a, b = marca_al_azar(), marca_al_azar()
+        score_bruto = float(fuzz.ratio(
+            normalizacion.clave_fonetica(a), normalizacion.clave_fonetica(b),
+        ))
+        score_exacto = _similitud_fonetica(a, b)
+        assert score_exacto <= score_bruto + 1e-9, (a, b, score_exacto, score_bruto)
+
+
+def test_prefiltro_no_pierde_una_anterioridad_clara_en_universo_grande():
+    """El motor debe seguir encontrando un match evidente aunque el universo
+    supere config.CANDIDATOS_PREFILTRO, ejercitando de verdad la rama de
+    prefiltro vectorizado + recalculo exacto (argpartition), que los demas
+    tests de este archivo nunca activan por usar universos chicos.
+    """
+    random.seed(1)
+    letras = "abcdefghijklmnopqrstuvwxyz"
+
+    def ruido_al_azar():
+        largo = random.randint(4, 10)
+        return "".join(random.choice(letras) for _ in range(largo)).upper()
+
+    n_ruido = config.CANDIDATOS_PREFILTRO * 3
+    marcas = [
+        {"mark_code": i + 1, "nombre": ruido_al_azar(), "clases": [25]}
+        for i in range(n_ruido)
+    ]
+    marcas.append({"mark_code": 999, "nombre": "CAUQUENES", "clases": [33]})
+
+    indice = IndiceFalso(marcas)
+    motor = MotorBusqueda(indice)
+    resultados = motor.buscar("KAUKENES", clases_consulta=[33], top=5)
+
+    assert any(r.mark_code == 999 for r in resultados)

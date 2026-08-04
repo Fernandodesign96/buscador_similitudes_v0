@@ -10,10 +10,6 @@ Uso:
 from __future__ import annotations
 
 import logging
-import os
-
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
-os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 from flask import Flask, jsonify, request, send_from_directory
 

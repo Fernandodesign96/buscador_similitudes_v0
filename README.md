@@ -59,7 +59,7 @@ buscador_anterioridades/
 │   ├── busqueda.py         ← Motor de búsqueda (combina las 2 señales, rapidfuzz.cdist)
 │   └── validacion.py       ← Módulo de validación de recall (uso interno)
 │
-├── tests/                  ← Suite de tests automatizados (61 tests)
+├── tests/                  ← Suite de tests automatizados (63 tests)
 │   ├── test_datos.py
 │   ├── test_normalizacion.py
 │   ├── test_busqueda.py
@@ -128,7 +128,7 @@ Si el usuario especifica clases de Niza, el motor aplica un factor de atenuació
 
 El motor ya no usa un índice FAISS ni recuperación previa de candidatos. En su lugar, compara la consulta contra las 218.369 marcas de forma exhaustiva usando `rapidfuzz.process.cdist` (implementación en C++ vectorizada), tanto para la señal ortográfica como para la fonética.
 
-Esto elimina la limitación anterior del MVP (marcas ortográficamente similares que quedaban fuera del recorte de candidatos semánticos) y a la vez es más rápido: el tiempo por consulta bajó de ~13 segundos (loop en Python) a ~0.11 segundos con `cdist`. El parámetro `CANDIDATOS_FAISS` sigue presente en `config.py` por compatibilidad pero ya no se usa.
+Esto elimina la limitación anterior del MVP (marcas ortográficamente similares que quedaban fuera del recorte de candidatos semánticos) y a la vez es más rápido: el tiempo por consulta bajó de ~13 segundos (loop en Python) a ~0.11 segundos con `cdist`.
 
 ---
 
@@ -309,13 +309,13 @@ Respuesta JSON:
 
 ## 10. Tests automatizados
 
-El proyecto tiene tests que cubren (nota: al eliminarse `indice.py` y sus tests asociados, corre `pytest` y actualiza el conteo de 61 antes de publicar esta versión — no lo tengo confirmado tras el cambio):
+El proyecto tiene tests que cubren:
 
 | Módulo | Tests | Qué verifican |
 |---|---|---|
 | `test_datos.py` | 13 | Lectura del Excel, derivación de solicitud_base, filtrado de estados, agrupación por marca |
 | `test_normalizacion.py` | 31 | Limpieza de texto (limpiar), reglas fonéticas (clave_fonetica), casos borde con tildes/ñ/puntuación |
-| `test_busqueda.py` | 13 | Combinación de señales, corrección de palabras genéricas, modulación por clase, ordenamiento |
+| `test_busqueda.py` | 15 | Combinación de señales, corrección de palabras genéricas, modulación por clase, ordenamiento, invariante de seguridad del prefiltro (descuento nunca supera el score bruto) y cobertura de la rama de prefiltro con universo grande |
 | `test_validacion.py` | 4 | Preparación de casos de validación y conteo de recall |
 
 Para correr:
@@ -323,7 +323,7 @@ Para correr:
 pytest
 ```
 
-Output esperado: `61 passed`.
+Output esperado: `63 passed`.
 
 ---
 
@@ -382,7 +382,7 @@ scp -r "G:\Mi unidad\01. IA en examen de fondo\buscador_anterioridades" usuario@
 git clone https://github.com/cihenzi/buscador-anterioridades /opt/buscador
 ```
 
-Los artefactos pesados (`data/indice.faiss`, `data/indice_meta.parquet`, `data/marcas_oponibles.parquet`) también deben transferirse porque no se regeneran automáticamente. Si el servidor tiene buena conexión, se pueden regenerar directamente ahí.
+El artefacto pesado `data/marcas_oponibles.parquet` también debe transferirse porque no se regenera automáticamente. Si el servidor tiene buena conexión, se puede regenerar directamente ahí con `construir_datos.py`.
 
 **Estructura de carpetas esperada en el servidor:**
 
@@ -391,9 +391,7 @@ Los artefactos pesados (`data/indice.faiss`, `data/indice_meta.parquet`, `data/m
 ├── buscador/
 ├── data/
 │   ├── Datos Marcas.xlsx
-│   ├── marcas_oponibles.parquet
-│   ├── indice.faiss          ← ~335 MB
-│   └── indice_meta.parquet
+│   └── marcas_oponibles.parquet
 ├── api.py
 ├── index.html
 ├── requirements.txt
@@ -424,49 +422,25 @@ pip install gunicorn
 
 ---
 
-#### 12.1.4 Descargar el modelo de embeddings en Linux
-
-El modelo debe estar en caché antes de arrancar el servicio. En Linux vive en `~/.cache/huggingface/`.
-
-```bash
-# Descargar el modelo (requiere acceso a internet)
-conda activate buscador
-python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')"
-```
-
-Si el servidor no tiene acceso a `huggingface.co` (firewall institucional), transferir la caché desde la máquina local:
-
-```bash
-# Desde Windows, comprimir la caché
-# C:\Users\camih\.cache\huggingface\hub\models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2
-# → subir como archivo .tar.gz al servidor
-
-# En el servidor, descomprimir en la ruta correcta
-mkdir -p ~/.cache/huggingface/hub
-tar -xzf modelo.tar.gz -C ~/.cache/huggingface/hub/
-```
-
----
-
-#### 12.1.5 Verificar que todo funciona antes de configurar el servicio
+#### 12.1.4 Verificar que todo funciona antes de configurar el servicio
 
 ```bash
 conda activate buscador
 cd /opt/buscador
 
 # Correr los tests
-pytest    # debe dar 61 passed
+pytest    # debe dar 63 passed
 
 # Probar la API manualmente
 gunicorn --bind 0.0.0.0:5001 --workers 1 --timeout 120 api:app
 # Abrir http://ip-servidor:5001 desde el navegador
 ```
 
-> **Por qué `--workers 1`:** el índice FAISS y el modelo se cargan en memoria por cada worker. Con 2 workers y 2 GB de RAM el servidor se queda sin memoria. Con 1 worker es más que suficiente para el volumen esperado de usuarios públicos; las consultas son instantáneas (<1 segundo).
+> **Por qué `--workers 1`:** el universo de marcas (parquet + representaciones canónica/fonética precalculadas) se carga en memoria por cada worker. Con 1 worker es más que suficiente para el volumen esperado de usuarios públicos; las consultas son instantáneas (<1 segundo).
 
 ---
 
-#### 12.1.6 Configurar como servicio systemd (arranque automático)
+#### 12.1.5 Configurar como servicio systemd (arranque automático)
 
 Para que el buscador quede corriendo permanentemente y se reinicie solo si el servidor se reinicia:
 
@@ -486,8 +460,6 @@ User=www-data
 Group=www-data
 WorkingDirectory=/opt/buscador
 Environment="PATH=/home/usuario/miniconda3/envs/buscador/bin"
-Environment="HF_HUB_OFFLINE=1"
-Environment="TRANSFORMERS_OFFLINE=1"
 ExecStart=/home/usuario/miniconda3/envs/buscador/bin/gunicorn \
     --bind 127.0.0.1:5001 \
     --workers 1 \
@@ -520,7 +492,7 @@ sudo systemctl status buscador
 
 ---
 
-#### 12.1.7 Configurar nginx como proxy inverso (acceso por puerto 80)
+#### 12.1.6 Configurar nginx como proxy inverso (acceso por puerto 80)
 
 Para que el buscador sea accesible por `http://dominio.inapi.cl` en lugar de `http://ip:5001`:
 
@@ -555,22 +527,20 @@ sudo systemctl reload nginx
 
 ---
 
-#### 12.1.8 Diferencias de comportamiento entre Windows y Linux
+#### 12.1.7 Diferencias de comportamiento entre Windows y Linux
 
 | Aspecto | Windows (desarrollo) | Linux (producción) |
 |---|---|---|
 | Variable SSL | `set SSL_CERT_FILE=` | `unset SSL_CERT_FILE` (normalmente no necesaria) |
-| Caché HuggingFace | `C:\Users\camih\.cache\huggingface` | `~/.cache/huggingface` |
 | Separador de rutas | `\` | `/` (el código usa `pathlib.Path`, es transparente) |
 | Servidor de desarrollo | `python api.py` | `gunicorn --bind 0.0.0.0:5001 --workers 1 api:app` |
 | Arranque automático | Manual | systemd |
-| Drive sync | Riesgo de corrupción del .faiss | No aplica (no hay Drive) |
 
 El código no requiere modificaciones para correr en Linux gracias al uso de `pathlib.Path` en todo el proyecto. Las únicas diferencias son operativas (cómo se arranca y cómo se gestiona el servicio).
 
 ---
 
-#### 12.1.9 Actualización del índice en Linux
+#### 12.1.8 Actualización de los datos en Linux
 
 Cuando lleguen datos nuevos, el proceso en Linux es el mismo que en Windows:
 
@@ -579,15 +549,12 @@ conda activate buscador
 cd /opt/buscador
 
 # 1. Reemplazar data/Datos Marcas.xlsx con el archivo nuevo
-# 2. Regenerar
+# 2. Regenerar marcas_oponibles.parquet
 python construir_datos.py
-python construir_indice.py    # ~8 minutos
 
-# 3. Reiniciar el servicio para que cargue el índice nuevo
+# 3. Reiniciar el servicio para que cargue el parquet nuevo
 sudo systemctl restart buscador
 ```
-
-No hay riesgo de corrupción por Drive porque el archivo vive directamente en el disco del servidor.
 
 ---
 
@@ -634,7 +601,6 @@ SQL_COL_NRO_REGISTRO: str = "nro_registro"         # confirmar con TIC
 
 ```bash
 python construir_datos.py --fuente sql
-python construir_indice.py
 sudo systemctl restart buscador
 ```
 
@@ -681,7 +647,7 @@ Estas decisiones se tomaron durante el desarrollo y vale la pena que TI las cono
 
 **Frontend single-file.** El archivo `index.html` contiene CSS, JavaScript y las 45 descripciones de clases NCL incrustadas. No depende de npm, webpack ni CDN externos. Esto simplifica el despliegue: basta con que Flask sirva ese archivo.
 
-**Pesos del motor son configurables sin tocar lógica.** Los parámetros `PESO_SEMANTICO`, `PESO_ORTOGRAFICO`, `PESO_FONETICO`, `CANDIDATOS_FAISS`, `TOP_RESULTADOS` y `FACTOR_CLASE_NO_RELACIONADA` están en `config.py`. Cambiarlos no requiere reconstruir el índice.
+**Pesos del motor son configurables sin tocar lógica.** Los parámetros `PESO_ORTOGRAFICO`, `PESO_FONETICO`, `CANDIDATOS_PREFILTRO`, `TOP_RESULTADOS` y `FACTOR_CLASE_NO_RELACIONADA` están en `config.py`. Cambiarlos no requiere reconstruir el dataset.
 
 ---
 

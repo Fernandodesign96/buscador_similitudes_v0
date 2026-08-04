@@ -134,6 +134,18 @@ def _similitud_fonetica(texto_a: str, texto_b: str) -> float:
     ya fusionada, texto_a.split() la trata como una sola palabra y el
     descuento pareado deja de funcionar correctamente para ese lado de la
     comparacion (bug corregido el 17-jul-2026 en MotorBusqueda.buscar()).
+
+    Al igual que en _similitud_ortografica, el resultado final es el minimo
+    entre el score base y el score sin las palabras comunes. Sin este
+    minimo, fuzz.ratio(fa, fb) podria en teoria superar a score_base (nada
+    garantiza que acortar dos cadenas suba o baje su ratio de edicion), lo
+    que rompe la invariante de la que depende MotorBusqueda.buscar() para
+    su prefiltro: que el descuento de genericos nunca puede aumentar un
+    score por encima del bruto calculado por cdist (bug corregido
+    03-ago-2026; hasta entonces esta funcion devolvia fuzz.ratio(fa, fb)
+    directamente, sin el minimo, y ese caso no estaba cubierto por tests
+    porque los universos de prueba son mas chicos que
+    config.CANDIDATOS_PREFILTRO).
     """
     if not texto_a or not texto_b:
         return 0.0
@@ -156,7 +168,8 @@ def _similitud_fonetica(texto_a: str, texto_b: str) -> float:
     if not fa or not fb:
         return score_base  # una marca es subconjunto fonetico de la otra
 
-    return float(fuzz.ratio(fa, fb))
+    score_sin_comunes = float(fuzz.ratio(fa, fb))
+    return min(score_base, score_sin_comunes)
 
 
 class MotorBusqueda:
