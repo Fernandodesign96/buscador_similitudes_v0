@@ -31,6 +31,9 @@ export async function buscarMarcas(
   if (params.per_page !== undefined) {
     search.set("per_page", String(params.per_page));
   }
+  if (params.similitud_min !== undefined) {
+    search.set("similitud_min", String(params.similitud_min));
+  }
 
   const response = await fetch(`/api/buscar?${search.toString()}`);
 

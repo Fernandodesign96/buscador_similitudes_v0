@@ -61,6 +61,9 @@ PESO_FONETICO: float = 0.42
 # Resultados finales devueltos por consulta.
 TOP_RESULTADOS: int = 10
 
+# Umbral minimo de similitud (%) para mostrar marcas en el MVP web.
+SIMILITUD_MIN_RESULTADOS: float = 75.0
+
 # Umbral de relacion de clase NCL: si las marcas no comparten clase, el score
 # combinado se atenua por este factor (clases no relacionadas = menor riesgo).
 FACTOR_CLASE_NO_RELACIONADA: float = 0.7

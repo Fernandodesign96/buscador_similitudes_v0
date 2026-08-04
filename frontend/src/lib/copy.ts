@@ -11,13 +11,18 @@ export const copy = {
       "Compara el nombre de tu marca con marcas previamente solicitadas o registradas ante INAPI. Identifica posibles similitudes denominativas antes de presentar tu solicitud ante INAPI.",
   },
   page: {
-    title: "Buscador de marcas",
+    title: "Buscador de similitud de marcas",
+    subtitle:
+      "Usa esta herramienta antes de iniciar la solicitud de tu marca",
   },
   search: {
-    label: "Nombre de tu marca",
+    label: "Nombre de tu marca (Denominación)",
     placeholder: "Ejemplo: Mi Marca",
     classesLabel: "Clasificación Internacional de Niza (NCL)",
-    classesOptional: "opcional",
+    nclTooltipTitle: "¿Qué es la Clasificación Internacional de Niza (NCL)?",
+    nclTooltipText:
+      "La marca se debe inscribir en al menos una clase (pueden ser varias), lo que dependerá del producto o servicio que esta represente. Existen 45 clases en total.",
+    nclTooltipAria: "Información sobre la Clasificación Internacional de Niza (NCL)",
     classesAll: "Todas las clases",
     classesCount: (n: number) =>
       n === 1 ? "1 clase seleccionada" : `${n} clases seleccionadas`,
@@ -26,48 +31,48 @@ export const copy = {
     clear: "Borrar nombre y resultados",
   },
   /**
-   * Disclaimer legal acordado (30-07-2026).
-   * Se muestra siempre al final del contenido principal (visible sin necesidad de buscar).
-   * Párrafos separados para legibilidad; el sentido jurídico se mantiene.
+   * Aviso legal acordado (30-07-2026).
+   * Pantalla de aceptación obligatoria antes de usar el buscador.
    */
   disclaimerLegal: {
+    introTitle: "¿Qué es este buscador?",
+    introText:
+      "El buscador compara el nombre que escribiste con marcas previamente solicitadas o registradas ante INAPI. Te muestra un porcentaje de parecido (considera cómo se escribe y cómo suena en español): cuanto más alto es el porcentaje, más similar es tu marca respecto a la encontrada.",
     title: "Aviso legal",
-    paragraphs: [
-      "Este buscador fonético permite identificar potenciales coincidencias o similitudes denominativas con marcas previamente solicitadas o registradas ante INAPI. Sus resultados tienen un carácter meramente informativo y orientador para los usuarios, no incluye el análisis de los elementos figurativos, gráficos o de imagen. Los resultados pueden contener algunos errores o imprecisiones. En consecuencia, su uso es de exclusiva responsabilidad de quien lo utiliza y, en ningún caso, sustituye, anticipa ni prejuzga el examen sustantivo que corresponde realizar a INAPI conforme a la normativa vigente, ni asegura el resultado de dicho examen o la eventual concesión o rechazo de una solicitud de marca.",
-    ],
+    text: "Este buscador fonético permite identificar potenciales coincidencias o similitudes denominativas con marcas previamente solicitadas o registradas ante INAPI. Sus resultados tienen un carácter meramente informativo y orientador para los usuarios, no incluye el análisis de los elementos figurativos, gráficos o de imagen. Los resultados pueden contener algunos errores o imprecisiones. En consecuencia, su uso es de exclusiva responsabilidad de quien lo utiliza y, en ningún caso, sustituye, anticipa ni prejuzga el examen sustantivo que corresponde realizar a INAPI conforme a la normativa vigente, ni asegura el resultado de dicho examen o la eventual concesión o rechazo de una solicitud de marca.",
+    acceptLabel: "He leído y aceptado el aviso legal.",
+    continue: "Comenzar",
   },
   results: {
     coincidenciasIntro: (total: number) =>
       total === 1
-        ? "Encontramos 1 coincidencia que podría ser similar a la tuya."
-        : `Encontramos ${total} coincidencias que podrían ser similares a la tuya.`,
+        ? "Existe 1 marca que es similar a la tuya, dentro de un rango de 75% o más."
+        : `Existen ${total} marcas que son similares a la tuya, dentro de un rango de 75% o más.`,
     coincidenciasRegistro:
-      "Aún puedes solicitar el registro si consideras que tu marca es lo suficientemente diferente.",
+      "Te recomendamos revisar las similitudes de tu marca con las existentes y la Clase de Niza elegida. Si tu marca ya se encuentra registrada por un tercero en la clase elegida, lo ideal es hacer una modificación en el nombre para evitar que sea rechazada.",
     coincidenciasVerificaTitulo: "Verifica si son similares en cuanto a:",
     coincidenciasAspectos: [
       "Ortografía",
       "Sonido o pronunciación",
       "Productos o servicios (Clases de Niza)",
     ] as const,
+    emptyTitle: "Sin marcas similares con 75 % o más",
     empty:
-      "No encontramos marcas registradas con un nombre parecido al que escribiste.",
+      "No encontramos marcas registradas con un 75 % o más de parecido al nombre que escribiste.",
+    emptyHint: (q: string) =>
+      `Marca buscada: «${q}». Puedes continuar con tu solicitud si lo deseas.`,
     emptyFiltered:
-      "No hay marcas parecidas en las clases que elegiste. Prueba otras clases o busca sin filtrar.",
+      "No hay marcas con un 75 % o más de parecido en las clases que elegiste. Prueba otras clases o busca sin filtrar.",
     error: (msg: string) =>
       `No pudimos completar la búsqueda. ${msg} Intenta de nuevo en unos minutos.`,
     claseRelacionada: "Misma clase NCL",
     ortografica: "Parecido al escribir",
     fonetica: "Parecido al pronunciar",
     clases: "Clases NCL",
-    opcionBNota:
-      "Mostramos hasta 200 marcas, de la más parecida a la menos parecida.",
     similitudLabel: "Similitud",
   },
   help: {
     title: "¿Cómo entender los resultados?",
-    porcentajeTitulo: "¿Qué significa el porcentaje?",
-    porcentajeTexto:
-      "El buscador compara el nombre que escribiste con marcas previamente solicitadas o registradas ante INAPI. Te muestra un porcentaje de parecido (considera cómo se escribe y cómo suena en español): cuanto más alto, más similar es tu marca respecto a la encontrada. Ese porcentaje orienta, pero no indica si INAPI aceptará o rechazará tu solicitud.",
     criteriosTitulo: "¿Cómo se calcula el parecido?",
     escritoTitulo: "Parecido al escribir",
     escritoTexto:
@@ -92,9 +97,6 @@ export const copy = {
       accion:
         "La similitud es baja o muy baja, por lo que los conflictos encontrados entre las características de tu marca con la encontrada son poco probables o casi nulos.",
     },
-    nclTitulo: "¿Qué es la Clasificación Internacional de Niza (NCL)?",
-    nclTexto:
-      "La marca se debe inscribir en al menos una clase (pueden ser varias), lo que dependerá del producto o servicio que esta represente. Existen 45 clases en total. Si tu marca ya se encuentra registrada por un tercero en la clase elegida, lo ideal es hacer una modificación en el nombre o diseño para evitar que sea rechazada.",
   },
   pagination: {
     anterior: "Página anterior",
@@ -121,7 +123,7 @@ export const copy = {
     breadcrumb: {
       inicio: "Inicio",
       marcas: "Marcas",
-      actual: "Buscador de marcas",
+      actual: "Buscador de similitud de marcas",
     },
     footer: {
       institucion: "Instituto Nacional de Propiedad Industrial (INAPI)",
