@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HelpAccordion } from "@/components/help/HelpAccordion";
+import { LegalDisclaimerGate } from "@/components/legal/LegalDisclaimerGate";
 import { ResultCard } from "@/components/results/ResultCard";
+import { ResultsEmptyState } from "@/components/results/ResultsEmptyState";
 import { ResultsGuidance } from "@/components/results/ResultsGuidance";
 import { ResultsPagination } from "@/components/results/ResultsPagination";
 import { ClassPicker } from "@/components/search/ClassPicker";
@@ -15,10 +17,12 @@ import { ApiError, buscarMarcas } from "@/lib/api";
 import { copy } from "@/lib/copy";
 import type { BusquedaResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { SIMILITUD_MIN_RESULTADOS } from "@/lib/similarity";
 import {
   searchControlClass,
   searchFieldLabelClass,
   searchPanelClass,
+  searchSubmitClass,
 } from "@/lib/search-layout";
 
 function usePerPage() {
@@ -37,9 +41,9 @@ function usePerPage() {
 
 export function BuscadorApp() {
   const perPage = usePerPage();
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const [consulta, setConsulta] = useState("");
   const [clases, setClases] = useState<number[]>([]);
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<BusquedaResponse | null>(null);
@@ -60,11 +64,11 @@ export function BuscadorApp() {
           clases: clases.length > 0 ? clases : undefined,
           top: 200,
           modo_clases: "filtrar",
+          similitud_min: SIMILITUD_MIN_RESULTADOS,
           page: pageNum,
           per_page: perPage,
         });
         setData(response);
-        setPage(response.page);
       } catch (err) {
         const message =
           err instanceof ApiError
@@ -81,12 +85,10 @@ export function BuscadorApp() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
     void ejecutarBusqueda(consulta, 1);
   };
 
   const handlePageChange = (newPage: number) => {
-    setPage(newPage);
     void ejecutarBusqueda(consulta, newPage);
   };
 
@@ -95,7 +97,6 @@ export function BuscadorApp() {
     setData(null);
     setError(null);
     setSearched(false);
-    setPage(1);
   };
 
   return (
@@ -105,130 +106,123 @@ export function BuscadorApp() {
           <h1 className="font-[family-name:var(--font-roboto-slab)] text-[31px] font-medium text-[#111]">
             {copy.page.title}
           </h1>
+          <p className="mt-3 max-w-2xl text-base leading-relaxed text-inapi-muted">
+            {copy.page.subtitle}
+          </p>
         </div>
       </div>
 
-      <main className="mx-auto w-full max-w-[1140px] px-6 py-8 text-left">
-        <HelpAccordion />
-
-        <section className={cn(searchPanelClass, "mb-6")}>
-          <form onSubmit={handleSubmit} className="w-full">
-            <div className="grid w-full gap-4 lg:grid-cols-[minmax(0,1fr)_280px_auto] lg:items-start">
-              <div className="min-w-0">
-                <label htmlFor="searchInput" className={searchFieldLabelClass}>
-                  {copy.search.label}
-                </label>
-                <div className="relative">
-                  <Input
-                    id="searchInput"
-                    type="text"
-                    value={consulta}
-                    onChange={(e) => setConsulta(e.target.value)}
-                    placeholder={copy.search.placeholder}
-                    className={cn(
-                      searchControlClass,
-                      "text-left",
-                      consulta.trim() && "pr-10",
+      {!legalAccepted ? (
+        <LegalDisclaimerGate onAccept={() => setLegalAccepted(true)} />
+      ) : (
+        <main className="mx-auto w-full max-w-[1140px] px-6 py-8 text-left">
+          <section className={searchPanelClass}>
+            <form onSubmit={handleSubmit} className="w-full">
+              <div className="grid w-full gap-4 lg:grid-cols-[minmax(0,1fr)_280px_auto] lg:items-start">
+                <div className="min-w-0">
+                  <label htmlFor="searchInput" className={searchFieldLabelClass}>
+                    {copy.search.label}
+                  </label>
+                  <div className="relative">
+                    <Input
+                      id="searchInput"
+                      type="text"
+                      value={consulta}
+                      onChange={(e) => setConsulta(e.target.value)}
+                      placeholder={copy.search.placeholder}
+                      className={cn(
+                        searchControlClass,
+                        "text-left",
+                        consulta.trim() && "pr-10",
+                      )}
+                      autoComplete="off"
+                    />
+                    {consulta.trim() && (
+                      <button
+                        type="button"
+                        onClick={handleClearSearch}
+                        aria-label={copy.search.clear}
+                        className="absolute top-1/2 right-2 flex size-7 -translate-y-1/2 items-center justify-center rounded text-[#999] transition-colors hover:bg-[#f2f2f2] hover:text-[#666] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inapi-blue/40"
+                      >
+                        <XIcon className="size-4" aria-hidden />
+                      </button>
                     )}
-                    autoComplete="off"
+                  </div>
+                </div>
+
+                <ClassPicker selected={clases} onChange={setClases} />
+
+                <div className="flex w-full flex-col lg:w-auto">
+                  <div
+                    className="mb-2 hidden min-h-11 lg:block"
+                    aria-hidden="true"
                   />
-                  {consulta.trim() && (
-                    <button
-                      type="button"
-                      onClick={handleClearSearch}
-                      aria-label={copy.search.clear}
-                      className="absolute top-1/2 right-2 flex size-7 -translate-y-1/2 items-center justify-center rounded text-[#999] transition-colors hover:bg-[#f2f2f2] hover:text-[#666] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inapi-blue/40"
-                    >
-                      <XIcon className="size-4" aria-hidden />
-                    </button>
-                  )}
+                  <Button
+                    type="submit"
+                    disabled={!consulta.trim() || loading}
+                    className={searchSubmitClass}
+                  >
+                    {loading ? copy.search.loading : copy.search.submit}
+                  </Button>
                 </div>
               </div>
-
-              <ClassPicker selected={clases} onChange={setClases} />
-
-              <div className="flex w-full flex-col lg:w-auto">
-                <div
-                  className="mb-2 hidden min-h-11 lg:block"
-                  aria-hidden="true"
-                />
-                <Button
-                  type="submit"
-                  disabled={!consulta.trim() || loading}
-                  className="h-11 min-h-11 w-full rounded-none bg-inapi-blue-dark px-6 font-bold hover:bg-inapi-blue-dark/90 lg:min-w-[180px]"
-                >
-                  {loading ? copy.search.loading : copy.search.submit}
-                </Button>
-              </div>
-            </div>
-          </form>
-        </section>
-
-        <p className="mb-6 text-sm text-inapi-muted">{copy.results.opcionBNota}</p>
-
-        {searched && (
-          <section aria-live="polite" aria-busy={loading}>
-            {loading && (
-              <div className="space-y-4">
-                <Skeleton className="h-4 w-64" />
-                <Skeleton className="h-40 w-full" />
-              </div>
-            )}
-
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{copy.results.error(error)}</AlertDescription>
-              </Alert>
-            )}
-
-            {!loading && !error && data && (
-              <>
-                {data.resultados.length === 0 ? (
-                  <p className="py-12 text-center text-sm text-inapi-muted">
-                    {clases.length > 0
-                      ? copy.results.emptyFiltered
-                      : copy.results.empty}
-                  </p>
-                ) : (
-                  <>
-                    <ResultsGuidance total={data.total} />
-                    <ul className="list-none">
-                      {data.resultados.map((r) => (
-                        <li key={`${r.nombre}-${r.similitud}`}>
-                          <ResultCard resultado={r} />
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-
-                <ResultsPagination
-                  page={data.page}
-                  totalPages={data.total_pages}
-                  onPageChange={handlePageChange}
-                />
-              </>
-            )}
+            </form>
           </section>
-        )}
 
-        <aside
-          className="mt-8 rounded bg-[#f2f2f2] p-6 text-sm leading-relaxed text-inapi-muted"
-          aria-labelledby="disclaimer-legal-title"
-        >
-          <h2
-            id="disclaimer-legal-title"
-            className="mb-4 text-base font-bold text-[#111]"
-          >
-            {copy.disclaimerLegal.title}
-          </h2>
-          {copy.disclaimerLegal.paragraphs.map((paragraph) => (
-            <p key={paragraph.slice(0, 40)} className="mt-3 first:mt-0">
-              {paragraph}
-            </p>
-          ))}
-        </aside>
-      </main>
+          {searched && (
+            <>
+              <HelpAccordion />
+
+              <section aria-live="polite" aria-busy={loading}>
+              {loading && (
+                <div className="space-y-4">
+                  <Skeleton className="h-4 w-64" />
+                  <Skeleton className="h-40 w-full" />
+                </div>
+              )}
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{copy.results.error(error)}</AlertDescription>
+                </Alert>
+              )}
+
+              {!loading && !error && data && (
+                <>
+                  {data.resultados.length === 0 ? (
+                    <ResultsEmptyState
+                      message={
+                        clases.length > 0
+                          ? copy.results.emptyFiltered
+                          : copy.results.empty
+                      }
+                      consulta={data.consulta}
+                    />
+                  ) : (
+                    <>
+                      <ResultsGuidance total={data.total} />
+                      <ul className="list-none">
+                        {data.resultados.map((r) => (
+                          <li key={`${r.nombre}-${r.similitud}`}>
+                            <ResultCard resultado={r} />
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+
+                  <ResultsPagination
+                    page={data.page}
+                    totalPages={data.total_pages}
+                    onPageChange={handlePageChange}
+                  />
+                </>
+              )}
+              </section>
+            </>
+          )}
+        </main>
+      )}
     </>
   );
 }

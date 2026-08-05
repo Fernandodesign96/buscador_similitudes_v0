@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { CircleHelp } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Popover,
   PopoverContent,
+  PopoverDescription,
+  PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { copy } from "@/lib/copy";
@@ -22,6 +25,7 @@ interface ClassPickerProps {
 
 export function ClassPicker({ selected, onChange }: ClassPickerProps) {
   const [open, setOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const toggle = (id: number) => {
     if (selected.includes(id)) {
@@ -42,10 +46,34 @@ export function ClassPicker({ selected, onChange }: ClassPickerProps) {
 
   return (
     <div className="w-full">
-      <label id="ncl-label" className={searchFieldLabelClass}>
-        {copy.search.classesLabel}{" "}
-        <span className="font-normal">({copy.search.classesOptional})</span>
-      </label>
+      <div className={searchFieldLabelClass}>
+        <span className="flex items-center gap-1.5">
+          <label id="ncl-label" className="cursor-default">
+            {copy.search.classesLabel}
+          </label>
+          <Popover open={helpOpen} onOpenChange={setHelpOpen}>
+            <PopoverTrigger
+              type="button"
+              aria-label={copy.search.nclTooltipAria}
+              className="flex size-5 shrink-0 items-center justify-center rounded-full text-[#999] transition-colors hover:text-inapi-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inapi-blue/40"
+            >
+              <CircleHelp className="size-4" aria-hidden />
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-[min(20rem,calc(100vw-2rem))] gap-2 p-4"
+              side="top"
+              align="start"
+            >
+              <PopoverTitle className="text-sm font-bold text-[#111]">
+                {copy.search.nclTooltipTitle}
+              </PopoverTitle>
+              <PopoverDescription className="text-sm leading-relaxed text-inapi-muted">
+                {copy.search.nclTooltipText}
+              </PopoverDescription>
+            </PopoverContent>
+          </Popover>
+        </span>
+      </div>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           type="button"
@@ -87,7 +115,7 @@ export function ClassPicker({ selected, onChange }: ClassPickerProps) {
         <ul className="mt-3 flex list-none flex-wrap gap-2">
           {selected.map((id) => (
             <li key={id}>
-              <span className="inline-flex items-center gap-1.5 rounded-2xl border border-[#B3E5FC] bg-[#E3F2FD] px-3 py-1.5 text-xs text-inapi-blue">
+              <span className="inline-flex items-center gap-1.5 rounded-sm border border-[#E6E6E6] bg-[#F8F9FA] px-3 py-1.5 text-xs text-inapi-text">
                 Clase {id} · {NCL_CLASSES[id]}
                 <button
                   type="button"

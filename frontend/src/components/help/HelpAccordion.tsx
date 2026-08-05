@@ -8,50 +8,32 @@ const NIVELES = [
 
 export function HelpAccordion() {
   return (
-    <details className="group mb-6 w-full overflow-hidden rounded-lg border border-inapi-blue text-left">
-      <summary className="cursor-pointer list-none bg-inapi-blue px-4 py-4 text-sm font-bold text-white [&::-webkit-details-marker]:hidden">
-        <span className="flex items-center justify-between">
+    <details className="group mb-8 w-full overflow-hidden rounded-sm border border-[#E6E6E6] bg-white text-left">
+      <summary className="cursor-pointer list-none bg-[#F8F9FA] px-4 py-3.5 text-sm font-medium text-[#111] transition-colors hover:bg-[#F2F2F2] [&::-webkit-details-marker]:hidden">
+        <span className="flex items-center justify-between gap-3">
           {copy.help.title}
-          <span className="group-open:hidden" aria-hidden>
+          <span
+            className="shrink-0 text-xs text-inapi-muted transition-transform group-open:rotate-180"
+            aria-hidden
+          >
             ▼
-          </span>
-          <span className="hidden group-open:inline" aria-hidden>
-            ▲
           </span>
         </span>
       </summary>
-      <div className="w-full space-y-6 border-t border-inapi-blue/20 bg-white px-6 py-6 text-left">
+      <div className="w-full space-y-6 border-t border-[#E6E6E6] bg-white px-4 py-6 text-left sm:px-6">
         <section>
-          <h2 className="mb-2 text-base font-bold text-[#111]">
-            {copy.help.porcentajeTitulo}
-          </h2>
-          <p className="text-sm leading-relaxed text-inapi-muted">
-            {copy.help.porcentajeTexto}
-          </p>
-        </section>
-
-        <section>
-          <h2 className="mb-2 text-base font-bold text-[#111]">
-            {copy.help.nclTitulo}
-          </h2>
-          <p className="text-sm leading-relaxed text-inapi-muted">
-            {copy.help.nclTexto}
-          </p>
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-base font-bold text-[#111]">
+          <h2 className="mb-3 text-base font-semibold text-[#111]">
             {copy.help.criteriosTitulo}
           </h2>
           <ul className="space-y-4 text-sm leading-relaxed text-inapi-muted">
             <li>
-              <strong className="block font-bold text-inapi-blue">
+              <strong className="block font-semibold text-[#111]">
                 {copy.help.escritoTitulo}
               </strong>
               {copy.help.escritoTexto}
             </li>
             <li>
-              <strong className="block font-bold text-inapi-blue">
+              <strong className="block font-semibold text-[#111]">
                 {copy.help.sonidoTitulo}
               </strong>
               {copy.help.sonidoTexto}
@@ -63,7 +45,7 @@ export function HelpAccordion() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-base font-bold text-[#111]">
+          <h2 className="mb-3 text-base font-semibold text-[#111]">
             {copy.help.nivelesTitulo}
           </h2>
           <ul className="space-y-3">
@@ -74,7 +56,7 @@ export function HelpAccordion() {
                   style={{ backgroundColor: n.color }}
                   aria-hidden
                 />
-                <span className="font-bold text-[#111]">{n.rango}</span>
+                <span className="font-semibold text-[#111]">{n.rango}</span>
                 <span className="text-inapi-muted">— {n.accion}</span>
               </li>
             ))}

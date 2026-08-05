@@ -1,5 +1,21 @@
-data/* 
-!data/marcas_oponibles.parquet 
-__pycache__/ 
-*.pyc 
-.pytest_cache/ 
+data/*
+!data/marcas_oponibles.parquet
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Entornos locales (no subir a GitHub — se recrean tras clonar)
+.venv/
+venv/
+
+# Frontend: artefactos generados (las dependencias se instalan con bun install)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env*
+
+# PDFs de referencia Lenguaje Claro (uso local; no versionar — archivos muy pesados)
+docs/lenguaje-claro/instrumento-evaluacion-sitios-web.pdf
+docs/lenguaje-claro/lenguaje-claro-recomendaciones.pdf
+docs/lenguaje-claro/meta-mei.pdf
+docs/lenguaje-claro/ui-kit-gobierno-3.0.1.pdf

@@ -60,6 +60,13 @@ def _filtrar_por_clases_estricto(resultados, clases: list[int]):
     return [r for r in resultados if set_clases & set(r.clases)]
 
 
+def _filtrar_por_similitud_minima(resultados, min_score: float):
+    """Solo marcas con score combinado >= min_score (porcentaje)."""
+    if min_score <= 0:
+        return resultados
+    return [r for r in resultados if r.score >= min_score]
+
+
 def _paginar(resultados, page: int, per_page: int):
     total = len(resultados)
     total_pages = max(1, math.ceil(total / per_page)) if total else 0
@@ -106,6 +113,7 @@ def buscar():
         modo_clases (str, opcional): "atenuar" (default) o "filtrar" (excluye sin clase en comun).
         page        (int, opcional): pagina para listados (default 1).
         per_page    (int, opcional): resultados por pagina, 10 o 20 (default 20).
+        similitud_min (float, opcional): porcentaje minimo de similitud (default 0).
     """
     consulta = (request.args.get("q") or "").strip()
     if not consulta:
@@ -140,10 +148,17 @@ def buscar():
     if per_page not in (10, 20):
         per_page = 20
 
+    try:
+        similitud_min = float(request.args.get("similitud_min", 0))
+    except ValueError:
+        similitud_min = 0
+
     resultados = _motor.buscar(consulta, clases_consulta=clases, top=top)
 
     if modo_clases == "filtrar":
         resultados = _filtrar_por_clases_estricto(resultados, clases)
+
+    resultados = _filtrar_por_similitud_minima(resultados, similitud_min)
 
     paginados, total, page, per_page, total_pages = _paginar(
         resultados, page, per_page,

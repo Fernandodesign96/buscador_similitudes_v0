@@ -61,6 +61,9 @@ PESO_FONETICO: float = 0.42
 # Resultados finales devueltos por consulta.
 TOP_RESULTADOS: int = 10
 
+# Umbral minimo de similitud (%) para mostrar marcas en el MVP web.
+SIMILITUD_MIN_RESULTADOS: float = 75.0
+
 # Umbral de relacion de clase NCL: si las marcas no comparten clase, el score
 # combinado se atenua por este factor (clases no relacionadas = menor riesgo).
 FACTOR_CLASE_NO_RELACIONADA: float = 0.7
@@ -73,4 +76,6 @@ FACTOR_CLASE_NO_RELACIONADA: float = 0.7
 # Justificacion: descontar palabras genericas solo puede REDUCIR el score de un
 # par (nunca aumentarlo), por lo que el ranking bruto es un superconjunto seguro
 # del ranking final para un N suficientemente holgado frente a TOP_RESULTADOS.
+# No confundir con el extinto CANDIDATOS_FAISS (recuperacion semantica, ya
+# retirada): este prefiltro es puramente ortografico/fonetico y determinista.
 CANDIDATOS_PREFILTRO: int = 200

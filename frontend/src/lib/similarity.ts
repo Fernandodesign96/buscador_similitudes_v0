@@ -1,7 +1,10 @@
 export type SimilarityLevel = "high" | "medium" | "low";
 
+/** Umbral mínimo (%) para mostrar marcas en resultados — alineado con api.py */
+export const SIMILITUD_MIN_RESULTADOS = 75;
+
 export function similarityLevel(value: number): SimilarityLevel {
-  if (value >= 75) return "high";
+  if (value >= SIMILITUD_MIN_RESULTADOS) return "high";
   if (value >= 50) return "medium";
   return "low";
 }
@@ -14,7 +17,7 @@ export function similarityColor(value: number): string {
 }
 
 export function badgeColors(similarity: number): { bg: string; text: string } {
-  if (similarity >= 75) {
+  if (similarity >= SIMILITUD_MIN_RESULTADOS) {
     return { bg: "#FFE5E5", text: "#D32F2F" };
   }
   return { bg: "#FFF3E0", text: "#FF9800" };

@@ -30,4 +30,5 @@ export interface BusquedaParams {
   modo_clases?: ModoClases;
   page?: number;
   per_page?: number;
+  similitud_min?: number;
 }

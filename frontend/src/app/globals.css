@@ -54,6 +54,8 @@
   --color-inapi-amber: #ffbe5c;
   --color-inapi-text: #373737;
   --color-inapi-muted: #666666;
+  --color-inapi-surface-muted: #f8f9fa;
+  --color-inapi-border: #e6e6e6;
   --color-similarity-high: #d32f2f;
   --color-similarity-medium: #ff9800;
   --color-similarity-low: #43a047;
