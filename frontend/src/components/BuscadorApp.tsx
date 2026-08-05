@@ -44,7 +44,6 @@ export function BuscadorApp() {
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [consulta, setConsulta] = useState("");
   const [clases, setClases] = useState<number[]>([]);
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<BusquedaResponse | null>(null);
@@ -70,7 +69,6 @@ export function BuscadorApp() {
           per_page: perPage,
         });
         setData(response);
-        setPage(response.page);
       } catch (err) {
         const message =
           err instanceof ApiError
@@ -87,12 +85,10 @@ export function BuscadorApp() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
     void ejecutarBusqueda(consulta, 1);
   };
 
   const handlePageChange = (newPage: number) => {
-    setPage(newPage);
     void ejecutarBusqueda(consulta, newPage);
   };
 
@@ -101,7 +97,6 @@ export function BuscadorApp() {
     setData(null);
     setError(null);
     setSearched(false);
-    setPage(1);
   };
 
   return (

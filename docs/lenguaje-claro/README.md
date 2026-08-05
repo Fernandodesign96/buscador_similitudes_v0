@@ -4,12 +4,15 @@ Carpeta con los criterios oficiales de calidad web y Lenguaje Claro para INAPI.
 
 ## Archivos PDF
 
+> **Nota:** Los PDF siguientes no se versionan en Git (están en `.gitignore` por su tamaño).  
+> Colócalos manualmente en esta carpeta en cada máquina de desarrollo.
+
 | Archivo | Descripción |
 |---------|-------------|
-| [lenguaje-claro-recomendaciones.pdf](./lenguaje-claro-recomendaciones.pdf) | Recomendaciones de Lenguaje Claro para la web (pirámide invertida, voz activa, enlaces) |
-| [instrumento-evaluacion-sitios-web.pdf](./instrumento-evaluacion-sitios-web.pdf) | Instrumento de evaluación de calidad para sitios web (Secretaría de Gobierno Digital) |
-| [meta-mei.pdf](./meta-mei.pdf) | Plan de transformación digital INAPI — brechas de calidad web |
-| [ui-kit-gobierno-3.0.1.pdf](./ui-kit-gobierno-3.0.1.pdf) | UI Kit Gobierno de Chile 3.0.1 |
+| `lenguaje-claro-recomendaciones.pdf` | Recomendaciones de Lenguaje Claro para la web (pirámide invertida, voz activa, enlaces) |
+| `instrumento-evaluacion-sitios-web.pdf` | Instrumento de evaluación de calidad para sitios web (Secretaría de Gobierno Digital) |
+| `meta-mei.pdf` | Plan de transformación digital INAPI — brechas de calidad web |
+| `ui-kit-gobierno-3.0.1.pdf` | UI Kit Gobierno de Chile 3.0.1 |
 
 ## Aplicación en este MVP
 

@@ -13,3 +13,9 @@ frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/.env*
+
+# PDFs de referencia Lenguaje Claro (uso local; no versionar — archivos muy pesados)
+docs/lenguaje-claro/instrumento-evaluacion-sitios-web.pdf
+docs/lenguaje-claro/lenguaje-claro-recomendaciones.pdf
+docs/lenguaje-claro/meta-mei.pdf
+docs/lenguaje-claro/ui-kit-gobierno-3.0.1.pdf
