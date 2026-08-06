@@ -39,7 +39,9 @@ from __future__ import annotations
 import re
 import unicodedata
 
-__all__ = ["limpiar", "clave_fonetica"]
+from . import config
+
+__all__ = ["limpiar", "clave_fonetica", "lema", "ordenar_tokens"]
 
 _RE_NO_ALFANUM = re.compile(r"[^a-z0-9ñ ]+")
 _RE_ESPACIOS = re.compile(r"\s+")
@@ -125,3 +127,58 @@ def clave_fonetica(texto: str | None) -> str:
 
     s = s.lower()                     # unifica sentinelas al alfabeto fonetico
     return _RE_DOBLES.sub(r"\1", s)   # colapsa letras repetidas
+
+
+_VOCALES = frozenset("aeiouñ")
+
+
+def lema(palabra: str) -> str:
+    """Singularizacion naive de una palabra: quita la 's' final de plural
+    cuando va precedida de vocal (cervezas -> cerveza, casas -> casa, rosas
+    -> rosa, marcas -> marca), que es el patron de plural mas frecuente del
+    espanol. No intenta el patron consonante + 'es' (flores -> flor):
+    distinguirlo del caso "la palabra ya terminaba en 'es'" (clases ->
+    clase) sin diccionario es ambiguo, y una regla equivocada podria fusionar
+    palabras que no deberian considerarse la misma.
+
+    Se usa en busqueda.py tanto para decidir que palabras cuentan como
+    "la misma" al detectar terminos comunes/genericos entre dos marcas (fix
+    06-ago-2026 AM, caso 'cervezas ricas' vs 'cerveza tribal'), como para
+    calcular la frecuencia de cada palabra en el universo de marcas (fix
+    06-ago-2026 PM, ponderacion por genericidad segun frecuencia de corpus).
+    Vive en este modulo (no en busqueda.py) porque tanto busqueda.py como
+    indice.py la necesitan, y busqueda.py ya importa indice.py: ponerla en
+    busqueda.py crearia un import circular.
+
+    Args:
+        palabra: una palabra individual (no una frase completa).
+
+    Returns:
+        La palabra singularizada si aplica la regla; si no, la palabra sin
+        modificar.
+    """
+    if (
+        len(palabra) >= config.LONGITUD_MINIMA_PALABRA_LEMA
+        and palabra.endswith("s")
+        and palabra[-2] in _VOCALES
+    ):
+        return palabra[:-1]
+    return palabra
+
+
+def ordenar_tokens(texto: str) -> str:
+    """Ordena alfabeticamente las palabras de una cadena y las vuelve a unir
+    con un espacio.
+
+    Reproduce el preprocesamiento que rapidfuzz.fuzz.token_sort_ratio hace
+    internamente. Se necesita como funcion propia (no solo implicita dentro
+    de token_sort_ratio) porque busqueda.py combina esa metrica con
+    Jaro-Winkler (fix 06-ago-2026 PM), que a diferencia de token_sort_ratio
+    no reordena tokens por si solo: para que ambas reciban el mismo
+    tratamiento de tolerancia al reordenamiento de palabras (ej. 'CASA
+    BLANCA' / 'BLANCA CASA'), hay que ordenarlas ANTES de pasarlas a
+    cualquiera de las dos metricas. indice.py tambien la usa para
+    precalcular la forma ordenada de cada marca una sola vez al cargar el
+    indice, en vez de reordenar el universo completo en cada consulta.
+    """
+    return " ".join(sorted(texto.split()))

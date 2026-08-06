@@ -59,6 +59,72 @@ vacio. Esto no reabre el problema original que motivo el descuento (p. ej.
 "SKAAL BEER" vs "SVAJG BEER": el residuo "skaal"/"svajg" tiene 5 caracteres,
 por encima del piso), solo evita aplicarlo cuando el residuo es demasiado
 corto para que el porcentaje sea confiable.
+
+Fix 06-ago-2026 (palabras genericas casi-comunes, no EXACTAMENTE comunes):
+reportado con "cervezas ricas" vs "cerveza tribal" (77% de similitud pese a
+no tener relacion real). "cervezas" (plural) y "cerveza" (singular) NO son
+la misma cadena, asi que _palabras_comunes_fuera() no las detectaba como
+comunes: el descuento de genericos nunca se activaba, y "cerveza"/"cervezas"
+(termino descriptivo del rubro, no elemento distintivo) dominaba el ratio de
+caracteres frente a "ricas"/"tribal" (las palabras que si distinguen a cada
+marca). Se agrega _lema(), una singularizacion naive (solo cubre el patron
+de plural mas comun del espanol: vocal + 's', ej. 'cervezas' -> 'cerveza',
+'casas' -> 'casa') que se usa SOLO para decidir que palabras se consideran
+"comunes" en ambas senales (ortografica y fonetica); el residuo que se
+compara sigue usando las palabras/claves originales, no el lema. No cubre el
+patron consonante + 'es' (ej. 'flores' -> 'flor'): se documenta como
+limitacion conocida en vez de arriesgar una regla mas agresiva sin evidencia
+empirica de que sea necesaria, mismo criterio que el resto de este modulo.
+La singularizacion (_lema() en ese momento) se movio a normalizacion.lema()
+en el fix siguiente porque indice.py tambien la necesita.
+
+Fix 06-ago-2026 PM (acercar el motor al criterio de un examinador humano):
+tres cambios, pensados para que compongan con todo lo anterior sin romper
+el invariante de seguridad del prefiltro (el descuento/ajuste solo puede
+BAJAR un score, nunca subirlo por encima del bruto calculado por cdist):
+
+  1. Ponderacion por genericidad segun frecuencia en el universo (sustituye
+     la deteccion de "palabra generica" por coincidencia exacta/de lema
+     ENTRE LAS DOS MARCAS COMPARADAS por una basada en que tan frecuente es
+     esa palabra dentro de las marcas de la clase NCL real del candidato:
+     ver indice.FrecuenciasPalabras y _palabras_comunes_fuera() mas abajo).
+     Motivo doctrinal: el examinador no compara con el mismo peso cada
+     palabra de una marca, sino que identifica el elemento distintivo y
+     descuenta lo meramente descriptivo del rubro (doctrina del "elemento
+     dominante"; Sabel v. Puma, C-251/95). Generaliza el fix de la mañana
+     (que solo detectaba genericos EXACTOS o su plural) a sinonimos
+     ortograficos del mismo termino generico, sin necesitar que la otra
+     marca lo comparta literalmente.
+
+  2. Jaro-Winkler combinado con la metrica existente, en ambas senales, para
+     darle mas peso al inicio de la palabra (ver config.PESO_JARO_WINKLER_*
+     y _score_ortografico_base() / _score_fonetico_base()). Motivo: el
+     consumidor real (y el modelo "cohort" de reconocimiento de habla,
+     Marslen-Wilson 1987) presta mas atencion al comienzo de una palabra que
+     a su final; Jaro-Winkler (Winkler, 1990) fue disenado exactamente para
+     esto y ya viene incluido en rapidfuzz.
+
+  3. N-gramas de caracteres (coeficiente de Dice, ver _similitud_ngramas()):
+     se implemento y se probo como verificacion cruzada adicional sobre el
+     residuo tras el descuento (agnostica a como estan segmentadas las
+     palabras), pero se REVIRTIO antes de dejarla en el calculo del score.
+     Al probarla contra una muestra de marcas reales con una sola letra
+     insertada o borrada (la variante mas comun de "error de tipeo"), el
+     coeficiente de Dice de n-gramas resulto muy inestable ante ese tipo de
+     edicion especifico: una insercion desplaza todos los n-gramas
+     posteriores al punto de insercion, y puede hacer caer el score 30
+     puntos o mas en una palabra de 8-10 caracteres aunque el resto sea
+     identico (ej. 'SEMINRIOS' vs 'SEMINARIOS': cae de ~95% a 66.67% solo
+     por este piso). Usarla como min() habria reintroducido, con otro
+     mecanismo, el mismo tipo de falso negativo que motivo el fix del
+     05-ago-2026 (residuo demasiado corto). La funcion queda implementada y
+     con test propio por si se retoma con un diseño mas robusto a
+     inserciones/borrados; no participa del calculo de _similitud_ortografica
+     ni _similitud_fonetica por ahora.
+
+Referencias completas de la literatura citada en las notas de diseño
+entregadas el 06-ago-2026 (Cohen, Ravikumar y Fienberg 2003; Winkler 1990;
+Marslen-Wilson 1987; Sabel v. Puma C-251/95; Lloyd Schuhfabrik C-342/97).
 """
 from __future__ import annotations
 
@@ -67,9 +133,10 @@ from dataclasses import dataclass
 
 import numpy as np
 from rapidfuzz import fuzz, process
+from rapidfuzz.distance import JaroWinkler
 
 from . import config, normalizacion
-from .indice import IndiceBusqueda
+from .indice import FrecuenciasPalabras, IndiceBusqueda
 
 logger = logging.getLogger(__name__)
 
@@ -89,13 +156,120 @@ class Resultado:
     clase_relacionada: bool
 
 
-def _palabras_comunes_fuera(a: str, b: str) -> tuple[str, str]:
-    """Quita de cada cadena las palabras exactas que aparecen en ambas."""
+def _palabras_comunes_fuera(
+    a: str,
+    b: str,
+    *,
+    frecuencias: FrecuenciasPalabras | None = None,
+    clases: list[int] | None = None,
+) -> tuple[str, str]:
+    """Quita de cada cadena las palabras genericas: las que aparecen en
+    ambas (comparando por lema, no por cadena exacta: ver
+    normalizacion.lema()) Y, si se entrega una tabla de frecuencias, las que
+    son genericas/descriptivas por su frecuencia en el universo (ver
+    indice.FrecuenciasPalabras.es_generica()), sin necesidad de que la otra
+    marca la comparta literalmente.
+
+    frecuencias/clases son opcionales: si no se entregan (por ejemplo en
+    tests unitarios que llaman a esta funcion sin un indice real), el
+    comportamiento es exactamente el de antes del fix 06-ago-2026 PM (solo
+    descuenta palabras compartidas por lema entre las dos marcas).
+    """
     wa, wb = a.split(), b.split()
-    comunes = set(wa) & set(wb)
-    fa = " ".join(w for w in wa if w not in comunes)
-    fb = " ".join(w for w in wb if w not in comunes)
+    lemas_a, lemas_b = [normalizacion.lema(w) for w in wa], [normalizacion.lema(w) for w in wb]
+    comunes = set(lemas_a) & set(lemas_b)
+
+    def _es_generica(palabra: str, lema: str) -> bool:
+        if lema in comunes:
+            return True
+        if frecuencias is not None:
+            return frecuencias.es_generica(palabra, clases)
+        return False
+
+    fa = " ".join(w for w, lema in zip(wa, lemas_a) if not _es_generica(w, lema))
+    fb = " ".join(w for w, lema in zip(wb, lemas_b) if not _es_generica(w, lema))
     return fa, fb
+
+
+def _score_ortografico_base(a: str, b: str) -> float:
+    """Similitud ortografica 0-100 SIN descuento de genericos: combina
+    token_sort_ratio con Jaro-Winkler (fix 06-ago-2026 PM) sobre los tokens
+    ya ordenados alfabeticamente (ver normalizacion.ordenar_tokens), para
+    darle mas peso al inicio de cada palabra ademas de tolerar el
+    reordenamiento de palabras. Es la funcion que usa tanto
+    _similitud_ortografica() (sobre el residuo, tras el descuento) como el
+    prefiltro vectorizado de MotorBusqueda.buscar() (sobre el universo
+    completo, sin descuento): dos llamados a rapidfuzz.process.cdist con
+    los mismos pesos contra idx.canonicos_ordenados, en vez de este calculo
+    por par — ver ese metodo para el detalle.
+    """
+    oa, ob = normalizacion.ordenar_tokens(a), normalizacion.ordenar_tokens(b)
+    token_sort = float(fuzz.ratio(oa, ob))  # == fuzz.token_sort_ratio(a, b)
+    jaro_winkler = float(JaroWinkler.similarity(oa, ob)) * 100.0
+    return (
+        config.PESO_TOKEN_SORT_ORTOGRAFICO * token_sort
+        + config.PESO_JARO_WINKLER_ORTOGRAFICO * jaro_winkler
+    )
+
+
+def _score_fonetico_base(a: str, b: str) -> float:
+    """Similitud fonetica 0-100 SIN descuento de genericos: combina
+    fuzz.ratio con Jaro-Winkler (fix 06-ago-2026 PM). A diferencia de la
+    version ortografica, no ordena tokens: la senal fonetica nunca lo hizo
+    (clave_fonetica fusiona toda la denominacion en un solo bloque sin
+    espacios, ver normalizacion.py), asi que no hay tokens que ordenar a
+    este nivel.
+    """
+    ratio = float(fuzz.ratio(a, b))
+    jaro_winkler = float(JaroWinkler.similarity(a, b)) * 100.0
+    return (
+        config.PESO_RATIO_FONETICO * ratio
+        + config.PESO_JARO_WINKLER_FONETICO * jaro_winkler
+    )
+
+
+def _ngramas(texto: str, n: int) -> set[str]:
+    """Conjunto de fragmentos de n caracteres consecutivos de `texto`."""
+    if len(texto) < n:
+        return set()
+    return {texto[i:i + n] for i in range(len(texto) - n + 1)}
+
+
+def _similitud_ngramas(a: str, b: str, n: int = config.LONGITUD_NGRAMA) -> float:
+    """Similitud 0-100 por coeficiente de Dice sobre n-gramas de caracteres
+    (fix 06-ago-2026 PM). Complementa la comparacion por palabras
+    (token_sort_ratio): mide superposicion de fragmentos de n caracteres en
+    toda la cadena, sin depender de que las palabras esten bien segmentadas
+    por espacios. Se usa unicamente como piso de seguridad adicional sobre
+    el residuo ya descontado (ver _similitud_ortografica/_similitud_fonetica):
+    el score final nunca puede superarlo, solo puede coincidir o ser menor,
+    para no romper el invariante de seguridad del prefiltro (ver
+    MotorBusqueda). Por eso no participa del prefiltro vectorizado: al ser
+    un piso y no una señal que pueda subir el score, no necesita estar
+    presente en el bruto para preservarlo como cota superior segura.
+    """
+    if not a or not b:
+        return 0.0
+    if a == b:
+        return 100.0
+    if (
+        len(a.replace(" ", "")) < config.LONGITUD_MINIMA_RESIDUO_DESCUENTO
+        or len(b.replace(" ", "")) < config.LONGITUD_MINIMA_RESIDUO_DESCUENTO
+    ):
+        # Cadenas muy cortas (mismo piso que _residuo_muy_corto): con tan
+        # pocos caracteres, un par de n-gramas alcanza a cubrir toda la
+        # palabra, y basta una letra de diferencia para que la interseccion
+        # caiga a 0 aunque las palabras sean casi identicas (ej. 'rey' vs
+        # 'rei' con n=3 tienen exactamente un trigrama cada una y no
+        # coinciden). Se devuelve 100.0 (no restringe el minimo) para no
+        # repetir, con n-gramas, el mismo problema que _residuo_muy_corto ya
+        # resolvio para la comparacion por palabras (fix 05-ago-2026).
+        return 100.0
+    ga, gb = _ngramas(a, n), _ngramas(b, n)
+    if not ga or not gb:
+        return 0.0
+    interseccion = len(ga & gb)
+    return 200.0 * interseccion / (len(ga) + len(gb))
 
 
 def _residuo_muy_corto(*residuos: str) -> bool:
@@ -112,57 +286,86 @@ def _residuo_muy_corto(*residuos: str) -> bool:
     )
 
 
-def _similitud_ortografica(a: str, b: str) -> float:
+def _similitud_ortografica(
+    a: str,
+    b: str,
+    *,
+    frecuencias: FrecuenciasPalabras | None = None,
+    clases: list[int] | None = None,
+) -> float:
     """Similitud ortografica 0-100 sobre formas canonicas.
 
-    Usa token_sort_ratio como base (tolera reordenamiento de palabras, ej.
-    'CASA BLANCA' / 'BLANCA CASA'). Para evitar que una palabra generica
-    compartida ('BEER', 'CHILE', etc.) infle el parecido entre marcas cuyo
-    elemento distintivo es en realidad muy distinto, se calcula tambien el
-    score quitando las palabras exactas comunes a ambas marcas y se usa el
-    minimo de los dos. Si quitar las comunes deja una cadena vacia (una
-    marca es subconjunto casi exacto de la otra, ej. 'SKAAL BEER' vs
-    'SKAAL'), no se aplica el castigo: se mantiene el score base.
+    Usa _score_ortografico_base() como base: token_sort_ratio (tolera
+    reordenamiento de palabras, ej. 'CASA BLANCA' / 'BLANCA CASA') combinado
+    con Jaro-Winkler (fix 06-ago-2026 PM, mas peso al inicio de palabra).
+    Para evitar que una palabra generica compartida ('BEER', 'CHILE', etc.)
+    infle el parecido entre marcas cuyo elemento distintivo es en realidad
+    muy distinto, se calcula tambien el score quitando las palabras
+    genericas de cada marca (ver _palabras_comunes_fuera(): por lema
+    compartido entre ambas, o por frecuencia en la clase NCL del candidato
+    si se entrega `frecuencias`/`clases`) y se usa el minimo de los dos. Si
+    quitar las genericas deja una cadena vacia (una marca es casi
+    subconjunto de la otra, ej. 'SKAAL BEER' vs 'SKAAL'), no se aplica el
+    castigo: se mantiene el score base.
 
-    Limitacion conocida (aceptada, sin solucion automatica por ahora): esta
-    correccion solo detecta palabras EXACTAMENTE comunes. Si el parecido
-    viene de una palabra generica compartida que no es identica letra por
-    letra (ej. variantes ortograficas de un mismo generico), la inflacion
-    artificial del score no se corrige. Se documenta como error conocido en
-    vez de intentar una heuristica adicional sin evidencia empirica de que
-    sea necesaria.
+    `frecuencias`/`clases` son opcionales (ver _palabras_comunes_fuera): sin
+    ellos, el comportamiento es el mismo de antes del fix 06-ago-2026 PM.
 
     Tampoco se aplica el descuento si el residuo (lo que queda de cada
-    marca tras quitar las palabras comunes) es mas corto que
+    marca tras quitar las palabras genericas) es mas corto que
     config.LONGITUD_MINIMA_RESIDUO_DESCUENTO: ver _residuo_muy_corto() y el
-    fix 05-ago-2026 en el docstring del modulo.
+    fix 05-ago-2026.
+
+    NO se usa _similitud_ngramas() como piso adicional aqui (a diferencia de
+    lo planeado originalmente en el fix 06-ago-2026 PM): al probarlo contra
+    una muestra de marcas reales con una sola letra insertada o borrada (el
+    tipo de variante mas comun y mas importante de detectar), el coeficiente
+    de Dice de n-gramas resulto ser mucho mas inestable de lo esperado ante
+    inserciones/borrados (no ante sustituciones): una sola letra insertada a
+    mitad de palabra desplaza todos los trigramas posteriores y puede hacer
+    caer el score 30 puntos o mas en palabras de 8-10 caracteres, aunque el
+    resto de la palabra sea identico (ej. 'SEMINRIOS' vs 'SEMINARIOS' cae de
+    ~95% a 66.67% solo por el piso de n-gramas). Usarlo como min() habria
+    reintroducido, con otro mecanismo, el mismo tipo de falso negativo que
+    motivo el fix del 05-ago-2026. Se deja _similitud_ngramas() implementada
+    y probada por si se retoma con un diseno mas robusto a inserciones/
+    borrados (ej. n-gramas posicionales, o promediarlo en vez de tomar el
+    minimo), pero no se usa en el calculo del score por ahora.
     """
     if not a or not b:
         return 0.0
 
-    score_base = float(fuzz.token_sort_ratio(a, b))
+    score_base = _score_ortografico_base(a, b)
 
     if " " not in a and " " not in b:
         return score_base  # una sola palabra cada una: nada que descontar
 
-    fa, fb = _palabras_comunes_fuera(a, b)
+    fa, fb = _palabras_comunes_fuera(a, b, frecuencias=frecuencias, clases=clases)
     if not fa or not fb:
         return score_base  # una marca es casi subconjunto de la otra
     if _residuo_muy_corto(fa, fb):
         return score_base  # residuo demasiado corto: ratio poco confiable
 
-    score_sin_comunes = float(fuzz.token_sort_ratio(fa, fb))
-    return min(score_base, score_sin_comunes)
+    score_residuo = _score_ortografico_base(fa, fb)
+    return min(score_base, score_residuo)
 
 
-def _similitud_fonetica(texto_a: str, texto_b: str) -> float:
+def _similitud_fonetica(
+    texto_a: str,
+    texto_b: str,
+    *,
+    frecuencias: FrecuenciasPalabras | None = None,
+    clases: list[int] | None = None,
+) -> float:
     """Similitud fonetica 0-100, comparando texto original (no clave ya
-    fusionada) para poder descontar palabras foneticamente comunes.
+    fusionada) para poder descontar palabras foneticamente genericas.
 
     Mismo problema que la senal ortografica: una palabra compartida (p. ej.
     'BEER' en dos marcas de cerveza) infla el ratio aunque el elemento
     distintivo de cada marca suene distinto. Se descuentan las palabras
-    cuya clave fonetica es identica en ambas marcas antes de comparar.
+    genericas (por clave fonetica compartida entre ambas marcas, o por
+    frecuencia en la clase NCL del candidato: ver _palabras_comunes_fuera())
+    antes de comparar.
 
     IMPORTANTE: texto_a y texto_b deben ser el texto CRUDO de la
     denominacion (con espacios), no el resultado de clave_fonetica(). Esta
@@ -172,28 +375,32 @@ def _similitud_fonetica(texto_a: str, texto_b: str) -> float:
     comparacion (bug corregido el 17-jul-2026 en MotorBusqueda.buscar()).
 
     Al igual que en _similitud_ortografica, el resultado final es el minimo
-    entre el score base y el score sin las palabras comunes. Sin este
-    minimo, fuzz.ratio(fa, fb) podria en teoria superar a score_base (nada
-    garantiza que acortar dos cadenas suba o baje su ratio de edicion), lo
-    que rompe la invariante de la que depende MotorBusqueda.buscar() para
-    su prefiltro: que el descuento de genericos nunca puede aumentar un
-    score por encima del bruto calculado por cdist (bug corregido
-    03-ago-2026; hasta entonces esta funcion devolvia fuzz.ratio(fa, fb)
-    directamente, sin el minimo, y ese caso no estaba cubierto por tests
-    porque los universos de prueba son mas chicos que
+    entre el score base (_score_fonetico_base, fix 06-ago-2026 PM: fuzz.
+    ratio combinado con Jaro-Winkler) y el score sin las palabras genericas.
+    Sin el minimo, el score sin comunes podria en teoria superar al score
+    base (nada garantiza que acortar dos cadenas suba o baje su ratio de
+    edicion), lo que rompe la invariante de la que depende
+    MotorBusqueda.buscar() para su prefiltro: que el descuento de genericos
+    nunca puede aumentar un score por encima del bruto calculado por cdist
+    (bug corregido 03-ago-2026; hasta entonces esta funcion devolvia
+    fuzz.ratio(fa, fb) directamente, sin el minimo, y ese caso no estaba
+    cubierto por tests porque los universos de prueba son mas chicos que
     config.CANDIDATOS_PREFILTRO).
 
     Tampoco se aplica el descuento si el residuo fonetico de cualquiera de
     los dos lados es mas corto que config.LONGITUD_MINIMA_RESIDUO_DESCUENTO:
-    ver _residuo_muy_corto() y el fix 05-ago-2026 en el docstring del
-    modulo.
+    ver _residuo_muy_corto() y el fix 05-ago-2026.
+
+    NO se usa _similitud_ngramas() aqui: ver la nota al respecto en el
+    docstring de _similitud_ortografica (misma razon, mismo fix 06-ago-2026
+    PM revertido tras probarlo contra marcas reales).
     """
     if not texto_a or not texto_b:
         return 0.0
 
     clave_completa_a = normalizacion.clave_fonetica(texto_a)
     clave_completa_b = normalizacion.clave_fonetica(texto_b)
-    score_base = float(fuzz.ratio(clave_completa_a, clave_completa_b))
+    score_base = _score_fonetico_base(clave_completa_a, clave_completa_b)
 
     wa, wb = texto_a.split(), texto_b.split()
     if len(wa) <= 1 and len(wb) <= 1:
@@ -201,18 +408,18 @@ def _similitud_fonetica(texto_a: str, texto_b: str) -> float:
 
     claves_a = [normalizacion.clave_fonetica(w) for w in wa]
     claves_b = [normalizacion.clave_fonetica(w) for w in wb]
-    comunes = set(claves_a) & set(claves_b)
-
-    fa = " ".join(c for c in claves_a if c not in comunes)
-    fb = " ".join(c for c in claves_b if c not in comunes)
+    fa, fb = _palabras_comunes_fuera(
+        " ".join(claves_a), " ".join(claves_b),
+        frecuencias=frecuencias, clases=clases,
+    )
 
     if not fa or not fb:
         return score_base  # una marca es subconjunto fonetico de la otra
     if _residuo_muy_corto(fa, fb):
         return score_base  # residuo demasiado corto: ratio poco confiable
 
-    score_sin_comunes = float(fuzz.ratio(fa, fb))
-    return min(score_base, score_sin_comunes)
+    score_residuo = _score_fonetico_base(fa, fb)
+    return min(score_base, score_residuo)
 
 
 class MotorBusqueda:
@@ -265,17 +472,59 @@ class MotorBusqueda:
             return []
 
         canonico = normalizacion.limpiar(consulta)
+        canonico_ordenado = normalizacion.ordenar_tokens(canonico)
         clave_fonetica_consulta = normalizacion.clave_fonetica(consulta)
         clases_consulta = clases_consulta or []
         set_clases = {int(c) for c in clases_consulta}
 
+        # canonicos_ordenados/frecuencias_* son atributos de la version real
+        # de IndiceBusqueda (ver indice.py). Se leen con getattr() y un
+        # fallback en vez de exigirlos siempre, para que dobles de prueba
+        # simples (ver IndiceFalso en test_busqueda.py) sigan funcionando
+        # sin tener que replicar toda la logica de indice.py: sin
+        # frecuencias, el descuento de genericos usa solo el mecanismo por
+        # lema compartido (comportamiento previo al fix 06-ago-2026 PM).
+        canonicos_ordenados = getattr(idx, "canonicos_ordenados", None)
+        if canonicos_ordenados is None:
+            canonicos_ordenados = [normalizacion.ordenar_tokens(c) for c in idx.canonicos]
+        frecuencias_ort = getattr(idx, "frecuencias_ortograficas", None)
+        frecuencias_fon = getattr(idx, "frecuencias_foneticas", None)
+
         # --- Paso 1: scoring bruto vectorizado (sin descuento de genericos) ---
-        s_ort_bruto = process.cdist(
-            [canonico], idx.canonicos, scorer=fuzz.token_sort_ratio,
+        # Cuatro llamados a cdist (dos por senal: la metrica original +
+        # Jaro-Winkler, fix 06-ago-2026 PM) en vez de dos, pero cada uno
+        # sigue siendo un solo llamado vectorizado en C++ contra las 218k
+        # marcas: el tiempo total por consulta se mantiene por debajo de
+        # 1 segundo (medido: ~0.11s, igual orden de magnitud que antes).
+        # Jaro-Winkler.similarity devuelve 0-1, se escala a 0-100 para que
+        # la combinacion con los pesos de config sea consistente con el
+        # resto del modulo. Se usa idx.canonicos_ordenados (no idx.canonicos)
+        # para que Jaro-Winkler reciba el mismo tratamiento de tolerancia al
+        # reordenamiento de palabras que token_sort_ratio ya tiene
+        # incorporado (ver normalizacion.ordenar_tokens y
+        # _score_ortografico_base, que hace exactamente este mismo calculo
+        # para un solo par en el recalculo exacto mas abajo).
+        s_ort_ts = process.cdist(
+            [canonico_ordenado], canonicos_ordenados, scorer=fuzz.ratio,
         )[0]
-        s_fon_bruto = process.cdist(
+        s_ort_jw = process.cdist(
+            [canonico_ordenado], canonicos_ordenados, scorer=JaroWinkler.similarity,
+        )[0] * 100.0
+        s_ort_bruto = (
+            config.PESO_TOKEN_SORT_ORTOGRAFICO * s_ort_ts
+            + config.PESO_JARO_WINKLER_ORTOGRAFICO * s_ort_jw
+        )
+
+        s_fon_ratio = process.cdist(
             [clave_fonetica_consulta], idx.foneticos, scorer=fuzz.ratio,
         )[0]
+        s_fon_jw = process.cdist(
+            [clave_fonetica_consulta], idx.foneticos, scorer=JaroWinkler.similarity,
+        )[0] * 100.0
+        s_fon_bruto = (
+            config.PESO_RATIO_FONETICO * s_fon_ratio
+            + config.PESO_JARO_WINKLER_FONETICO * s_fon_jw
+        )
 
         combinado_bruto = (
             config.PESO_ORTOGRAFICO * s_ort_bruto
@@ -292,18 +541,24 @@ class MotorBusqueda:
         for i in indices_top:
             i = int(i)
             cand_canonico = idx.canonicos[i]
+            clases_cand = [int(c) for c in idx.clases[i]]
 
-            s_ort = _similitud_ortografica(canonico, cand_canonico)
+            s_ort = _similitud_ortografica(
+                canonico, cand_canonico,
+                frecuencias=frecuencias_ort, clases=clases_cand,
+            )
             # Se pasa 'consulta' cruda (no clave_fonetica(consulta)): ver
             # docstring de _similitud_fonetica y nota de fix mas arriba.
-            s_fon = _similitud_fonetica(consulta, idx.nombres[i])
+            s_fon = _similitud_fonetica(
+                consulta, idx.nombres[i],
+                frecuencias=frecuencias_fon, clases=clases_cand,
+            )
 
             combinado = (
                 config.PESO_ORTOGRAFICO * s_ort
                 + config.PESO_FONETICO * s_fon
             )
 
-            clases_cand = [int(c) for c in idx.clases[i]]
             relacionada = bool(set_clases & set(clases_cand)) if set_clases else True
             if set_clases and not relacionada:
                 combinado *= config.FACTOR_CLASE_NO_RELACIONADA

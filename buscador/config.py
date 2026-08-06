@@ -81,6 +81,63 @@ FACTOR_CLASE_NO_RELACIONADA: float = 0.7
 # busqueda.py.
 LONGITUD_MINIMA_RESIDUO_DESCUENTO: int = 4
 
+# Longitud minima (en caracteres) que debe tener una palabra para que
+# normalizacion.lema() intente singularizarla (quitarle la 's' final de
+# plural cuando va precedida de vocal, ej. 'cervezas' -> 'cerveza'). Evita
+# singularizar palabras muy cortas, donde quitar la 's' final tiene mas
+# riesgo de fusionar por error dos palabras que no son la misma. Fix
+# 06-ago-2026 AM, caso "cervezas ricas" vs "cerveza tribal": el plural
+# evitaba que "cerveza"/"cervezas" (termino generico del rubro) se
+# detectara como palabra comun, y el descuento de genericos nunca se
+# activaba.
+LONGITUD_MINIMA_PALABRA_LEMA: int = 4
+
+# --- Ponderacion por genericidad segun frecuencia en el universo ----------
+# Fix 06-ago-2026 PM: reemplaza (complementa) la deteccion de "palabra
+# generica" por coincidencia exacta o de lema ENTRE LAS DOS MARCAS
+# COMPARADAS por una basada en que tan frecuente es esa palabra dentro de
+# las marcas de la MISMA clase NCL que el candidato. Ver
+# indice.FrecuenciasPalabras.es_generica().
+#
+# UMBRAL_FRECUENCIA_GENERICO: fraccion minima (0-1) de las marcas de una
+# clase que deben tener una palabra para considerarla generica/descriptiva
+# de ese rubro. Calibrado empiricamente contra el universo real: "cerveza"
+# aparece en ~4.7% de las marcas de la clase 32 (claramente generico ahi),
+# mientras que palabras comunes del espanol pero no descriptivas de ningun
+# rubro en particular (ej. "sur") no superan ~0.7% en ninguna clase
+# individual. 1% separa razonablemente ambos grupos.
+UMBRAL_FRECUENCIA_GENERICO: float = 0.01
+
+# CONTEO_MINIMO_GENERICO: ademas del umbral anterior, la palabra debe
+# aparecer en al menos este numero absoluto de marcas de la clase. Evita que
+# una clase con pocas marcas totales produzca porcentajes ruidosos (ej. una
+# palabra repetida 3 veces en una clase de 50 marcas ya es 6%, sin que eso
+# signifique que sea realmente generica).
+CONTEO_MINIMO_GENERICO: int = 20
+
+# --- Ponderacion por inicio de palabra (Jaro-Winkler) ----------------------
+# Fix 06-ago-2026 PM: un consumidor real presta mas atencion al inicio de
+# una palabra que a su final (modelo "cohort" de reconocimiento de habla,
+# Marslen-Wilson 1987; metrica de Winkler 1990 usada en record linkage).
+# Se combina la metrica de similitud existente (token_sort_ratio para la
+# senal ortografica, fuzz.ratio para la fonetica) con Jaro-Winkler, que da
+# un bono cuando dos cadenas comparten el inicio. Los pesos de cada mezcla
+# suman 1.0; se dejo un peso menor a Jaro-Winkler porque es un ajuste, no un
+# reemplazo, de la metrica ya validada por los tests existentes.
+PESO_TOKEN_SORT_ORTOGRAFICO: float = 0.75
+PESO_JARO_WINKLER_ORTOGRAFICO: float = 0.25
+PESO_RATIO_FONETICO: float = 0.75
+PESO_JARO_WINKLER_FONETICO: float = 0.25
+
+# --- N-gramas de caracteres como verificacion cruzada adicional ------------
+# Fix 06-ago-2026 PM: complementa la comparacion por palabras (token_sort_
+# ratio) con una medida agnostica a como estan segmentadas las palabras: el
+# coeficiente de Dice sobre fragmentos de N caracteres de la cadena
+# completa. Se usa como piso de seguridad adicional (el score final nunca
+# puede superarlo), no como señal que pueda subir el score, para no romper
+# el invariante del prefiltro vectorizado (ver busqueda.py).
+LONGITUD_NGRAMA: int = 3
+
 # --- Pre-filtro vectorizado (cdist) ---------------------------------------
 # Decision de julio 2026: el motor calcula un score bruto (sin descuento de
 # palabras genericas) contra el universo completo usando rapidfuzz.process.cdist

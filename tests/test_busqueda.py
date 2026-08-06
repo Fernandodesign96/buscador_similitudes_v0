@@ -20,8 +20,12 @@ from rapidfuzz import fuzz
 
 from buscador import config, normalizacion
 from buscador.busqueda import MotorBusqueda
+from buscador.busqueda import _score_fonetico_base
+from buscador.busqueda import _score_ortografico_base
 from buscador.busqueda import _similitud_fonetica
+from buscador.busqueda import _similitud_ngramas
 from buscador.busqueda import _similitud_ortografica
+from buscador.indice import FrecuenciasPalabras
 
 
 class IndiceFalso:
@@ -118,6 +122,22 @@ def test_palabra_generica_compartida_no_infla_el_score():
     assert s_con == pytest.approx(s_sin, abs=0.5)
 
 
+def test_palabra_generica_en_plural_tambien_se_descuenta():
+    # Caso reportado 06-ago-2026: "cervezas ricas" vs "cerveza tribal" daba
+    # 77% pese a no tener relacion real, porque "cervezas" (plural) no
+    # coincidia EXACTO con "cerveza" (singular) y el descuento nunca se
+    # activaba. "ricas" y "tribal" no se parecen: el score con el generico
+    # en plural descontado debe acercarse al score sin el generico en
+    # absoluto (singular), y quedar bien por debajo del score bruto (que
+    # incluye "cerveza"/"cervezas" sin descontar).
+    s_bruto = _similitud_ortografica("cervezas", "cerveza")  # referencia
+    assert s_bruto > 85.0  # confirma que son casi la misma palabra
+
+    s_con_plural = _similitud_ortografica("cervezas ricas", "cerveza tribal")
+    s_sin_generico = _similitud_ortografica("ricas", "tribal")
+    assert s_con_plural == pytest.approx(s_sin_generico, abs=0.5)
+
+
 def test_subconjunto_casi_exacto_no_se_castiga():
     # "SKAAL BEER" vs "SKAAL": quitar la comun deja una cadena vacia,
     # no debe caer a 0.
@@ -161,6 +181,12 @@ def test_similitud_fonetica_nunca_supera_el_score_bruto():
     _similitud_ortografica). Se prueba con pares generados al azar (mezcla
     de palabras y letras) para no depender solo de los ejemplos de mano
     usados en los demas tests.
+
+    El "bruto" de referencia usa _score_fonetico_base(), no fuzz.ratio()
+    directo: desde el fix 06-ago-2026 PM ese es el calculo real que hace el
+    prefiltro vectorizado de MotorBusqueda.buscar() (fuzz.ratio combinado
+    con Jaro-Winkler, no fuzz.ratio solo), asi que es la cota superior real
+    contra la que hay que verificar el invariante.
     """
     random.seed(0)
     letras = "abcdefghijklmnopqrstuvwxyz"
@@ -179,9 +205,9 @@ def test_similitud_fonetica_nunca_supera_el_score_bruto():
 
     for _ in range(200):
         a, b = marca_al_azar(), marca_al_azar()
-        score_bruto = float(fuzz.ratio(
+        score_bruto = _score_fonetico_base(
             normalizacion.clave_fonetica(a), normalizacion.clave_fonetica(b),
-        ))
+        )
         score_exacto = _similitud_fonetica(a, b)
         assert score_exacto <= score_bruto + 1e-9, (a, b, score_exacto, score_bruto)
 
@@ -206,6 +232,87 @@ def test_residuo_largo_sigue_descontandose():
     s_con = _similitud_ortografica("skaal beer", "svajg beer")
     s_sin = _similitud_ortografica("skaal", "svajg")
     assert s_con == pytest.approx(s_sin, abs=0.5)
+
+
+def test_genericidad_por_frecuencia_no_requiere_coincidencia_exacta():
+    # Caso reportado 06-ago-2026 PM: "cerveza"/"cervezas" son genericas
+    # PARA LA CLASE 32 por su frecuencia en el universo, sin necesidad de
+    # que ambas marcas la compartan literalmente (ya se resolvia el caso
+    # exacto/plural con el fix de la mañana; esto generaliza a cualquier
+    # termino frecuente en la clase real del candidato).
+    frecuencias = FrecuenciasPalabras(
+        conteo_por_clase={32: {"cerveza": 50}},
+        total_por_clase={32: 100},
+    )
+    s_con_generico = _similitud_ortografica(
+        "cervezas ricas", "cerveza tribal",
+        frecuencias=frecuencias, clases=[32],
+    )
+    s_sin_generico = _similitud_ortografica("ricas", "tribal")
+    assert s_con_generico == pytest.approx(s_sin_generico, abs=0.5)
+
+
+def test_genericidad_por_frecuencia_respeta_piso_de_conteo_y_clase():
+    # Sin clases del candidato, o con una clase demasiado chica para
+    # superar config.CONTEO_MINIMO_GENERICO, no se descuenta nada: evita
+    # que una clase con pocas marcas produzca porcentajes ruidosos.
+    frecuencias = FrecuenciasPalabras(
+        conteo_por_clase={32: {"cerveza": 3}},  # bajo el piso de conteo (20)
+        total_por_clase={32: 10},
+    )
+    assert frecuencias.es_generica("cerveza", [32]) is False
+    assert frecuencias.es_generica("cerveza", None) is False
+    assert frecuencias.es_generica("cerveza", []) is False
+
+
+def test_typo_en_palabra_distintiva_no_se_castiga_por_genericos_alrededor():
+    """Caso reportado 06-ago-2026 PM: en un nombre largo donde varias
+    palabras son genericas por frecuencia, el descuento las quita a todas
+    dejando solo la palabra con el error de tipeo como residuo. Un error de
+    una sola letra en esa palabra (10 caracteres) no deberia hacer caer el
+    score a ~67% (eso fue precisamente el bug que motivo revertir el piso
+    de n-gramas, ver docstring del modulo: 'SEMINRIOS' vs 'SEMINARIOS').
+    """
+    frecuencias = FrecuenciasPalabras(
+        conteo_por_clase={41: {
+            "insight": 40, "mejor": 40, "persona": 40, "resultado": 40,
+        }},
+        total_por_clase={41: 100},
+    )
+    a = normalizacion.limpiar("SEMINRIOS INSIGHT MEJORES PERSONAS MEJORES RESULTADOS")
+    b = normalizacion.limpiar("SEMINARIOS INSIGHT MEJORES PERSONAS MEJORES RESULTADOS")
+    s = _similitud_ortografica(a, b, frecuencias=frecuencias, clases=[41])
+    assert s > 90.0
+
+
+def test_jaro_winkler_favorece_coincidencia_de_inicio():
+    # Dos pares con la misma distancia de edicion (una sustitucion), uno
+    # difiere al inicio de la palabra y el otro al final: Jaro-Winkler da
+    # un bono al prefijo compartido, asi que el que difiere al final debe
+    # obtener un score igual o mayor.
+    s_dif_inicio = _score_ortografico_base("xolgar", "solgar")
+    s_dif_final = _score_ortografico_base("solgar", "solgax")
+    assert s_dif_final >= s_dif_inicio
+
+
+def test_similitud_ngramas_identicas_da_100():
+    assert _similitud_ngramas("solgar", "solgar") == 100.0
+
+
+def test_similitud_ngramas_cadena_corta_no_restringe():
+    # Por debajo de config.LONGITUD_MINIMA_RESIDUO_DESCUENTO, no es una
+    # señal confiable (ver docstring de _similitud_ngramas): no debe
+    # devolver 0 aunque las cadenas no compartan ningun trigrama.
+    assert _similitud_ngramas("rey", "rei") == 100.0
+
+
+def test_similitud_ngramas_detecta_insercion_como_baja_similitud():
+    # Documenta por que no se usa como piso en el pipeline (ver docstring
+    # del modulo): una insercion de una letra puede hacer caer el
+    # coeficiente de Dice bastante mas de lo que cae token_sort_ratio para
+    # el mismo par.
+    assert _similitud_ngramas("seminrios", "seminarios") < 70.0
+    assert _score_ortografico_base("seminrios", "seminarios") > 90.0
 
 
 def test_prefiltro_no_pierde_una_anterioridad_clara_en_universo_grande():

@@ -55,14 +55,16 @@ buscador_anterioridades/
 ├── buscador/               ← Paquete Python (lógica de negocio)
 │   ├── config.py           ← Rutas, pesos y parámetros del motor
 │   ├── datos.py            ← Lectura y filtrado del Excel de marcas
-│   ├── normalizacion.py    ← Limpieza de texto y clave fonética española
+│   ├── normalizacion.py    ← Limpieza de texto, clave fonética española y lema (singularización)
+│   ├── indice.py           ← Carga el universo en memoria + tablas de frecuencia por clase NCL
 │   ├── busqueda.py         ← Motor de búsqueda (combina las 2 señales, rapidfuzz.cdist)
 │   └── validacion.py       ← Módulo de validación de recall (uso interno)
 │
-├── tests/                  ← Suite de tests automatizados (63 tests)
+├── tests/                  ← Suite de tests automatizados (77 tests)
 │   ├── test_datos.py
 │   ├── test_normalizacion.py
 │   ├── test_busqueda.py
+│   ├── test_indice.py
 │   └── test_validacion.py
 │
 ├── exploracion/            ← Scripts de análisis y diagnóstico (desechables)
@@ -79,10 +81,13 @@ buscador_anterioridades/
 ├── validar.py              ← Script: mide recall contra observaciones M10 (uso interno)
 ├── validar_rapido.py       ← Script: valida contra rechazos_2026.xlsx usando rapidfuzz.cdist
 ├── api.py                  ← Servidor Flask + endpoint de búsqueda
-├── index.html              ← Interfaz web del usuario
+├── index.html              ← Interfaz web legacy (no es la que está en uso, ver nota)
+├── frontend/               ← Interfaz web actualmente en uso
 ├── requirements.txt
 └── pytest.ini
 ```
+
+> **Nota (ago 2026):** el equipo dejó de servir `index.html` como interfaz y usa la carpeta `frontend/` en su lugar. `index.html` se mantiene en el repositorio sin modificar (no se toca al hacer cambios en el motor de búsqueda); todos los fixes de este documento son exclusivamente sobre `buscador/` (backend) y no requieren ni implican ningún cambio en `frontend/`.
 
 ### 3.2 Flujo de datos
 
@@ -118,7 +123,59 @@ El motor combina dos señales para evaluar el parecido entre dos denominaciones:
 
 Un problema detectado y corregido durante el desarrollo: si dos marcas comparten una palabra genérica del rubro (ej. "BEER" en clase 32, "CHILE" en marcas nacionales), esa palabra compartida infla artificialmente el score ortográfico y fonético, aunque los elementos distintivos de cada marca sean completamente distintos.
 
-La corrección aplicada: antes de calcular el score, se identifican las palabras exactamente comunes a ambas marcas y se descuentan de la comparación. Si al descontar las palabras comunes una de las cadenas queda vacía (es decir, una marca es casi subconjunto de la otra, ej. "SKAAL BEER" vs "SKAAL"), se mantiene el score original sin penalización. Esta corrección se aplica tanto a la función ortográfica como a la fonética, ya que ambas usan `token_sort_ratio` internamente y ambas mostraban el mismo problema de inflación.
+La corrección aplicada: antes de calcular el score, se identifican las palabras genéricas de cada marca y se descuentan de la comparación. Si al descontar las palabras genéricas una de las cadenas queda vacía (es decir, una marca es casi subconjunto de la otra, ej. "SKAAL BEER" vs "SKAAL"), se mantiene el score original sin penalización. Esta corrección se aplica tanto a la función ortográfica como a la fonética, ya que ambas usan `token_sort_ratio` internamente y ambas mostraban el mismo problema de inflación.
+
+Una palabra se considera genérica de dos formas, que se combinan (ver `busqueda._palabras_comunes_fuera()`):
+
+1. **Por lema compartido entre las dos marcas comparadas** (mecanismo original): se compara por `normalizacion.lema()`, no por cadena exacta, para que un plural y su singular (ej. "cervezas" / "cerveza") cuenten como la misma palabra — ver 4.2.1.
+2. **Por frecuencia en el universo real**, condicionada por clase NCL (fix 06-ago-2026 PM, ver 4.2.2): una palabra que aparece en una fracción alta de las marcas de la clase del candidato se descuenta aunque la consulta no la comparta letra por letra.
+
+Adicionalmente, el descuento no se aplica si el residuo que queda tras quitar las palabras genéricas es demasiado corto (ver 4.2.3), porque el ratio de edición normalizado es estadísticamente inestable sobre 2-3 caracteres.
+
+#### 4.2.1 Fix 06-ago-2026 AM — plural/singular ("cervezas ricas" vs "cerveza tribal")
+
+Reportado por el equipo: "cervezas ricas" obtenía 77% de similitud con "cerveza tribal", sin relación real entre ambas. Causa: "cervezas" (plural) y "cerveza" (singular) no son la misma cadena, así que el mecanismo de descuento por coincidencia exacta no las detectaba como comunes, y el término genérico del rubro ("cerveza"/"cervezas") dominaba el ratio de caracteres frente a las palabras que sí distinguen a cada marca ("ricas" / "tribal").
+
+Corrección: `normalizacion.lema()`, una singularización naive que cubre el patrón de plural más común del español (vocal + "s": "cervezas" → "cerveza", "casas" → "casa"). Se usa **solo** para decidir qué palabras cuentan como "la misma" al detectar términos comunes; el residuo que efectivamente se compara sigue usando las palabras originales, no el lema. No cubre el patrón consonante + "es" (ej. "flores" → "flor"): se deja documentado como limitación conocida en vez de arriesgar una regla más agresiva sin evidencia empírica de que sea necesaria.
+
+#### 4.2.2 Fix 06-ago-2026 PM — genericidad por frecuencia en la clase NCL, no solo por coincidencia exacta
+
+El mecanismo de 4.2.1 solo detecta como genérica una palabra si **ambas** marcas la comparten (exactamente o por lema). No detecta que "cerveza" es genérico en clase 32 si la consulta usa un sinónimo, ni pondera cuán descriptiva es realmente una palabra para el rubro del candidato.
+
+Fundamento doctrinal: un examinador humano no le da el mismo peso a cada palabra de una marca; identifica el elemento distintivo y descuenta lo meramente descriptivo del rubro (doctrina del "elemento dominante"; *Sabel v. Puma*, C-251/95). Esto se generaliza calculando, para cada palabra (por su lema), qué fracción de las marcas de una clase NCL la contienen — ver `indice.FrecuenciasPalabras` — y considerándola genérica en esa comparación si supera un umbral.
+
+Se condiciona **por clase**, no globalmente, porque una frecuencia global confunde "palabra genérica del rubro" con "palabra común del español": por ejemplo "sur" aparece en cientos de marcas del universo completo (clases tan distintas como alimentos, transporte y servicios financieros) pero no supera ~0.7% de las marcas dentro de ninguna clase individual, mientras que "cerveza" es ~4.7% de las marcas de la clase 32. Una palabra se considera genérica si:
+
+- aparece en al menos `config.CONTEO_MINIMO_GENERICO` (20) marcas de esa clase — evita que una clase pequeña con pocas marcas totales produzca porcentajes ruidosos, y
+- esa cantidad representa al menos `config.UMBRAL_FRECUENCIA_GENERICO` (1%) de las marcas de la clase.
+
+Basta con que sea genérica en **una sola** de las clases del candidato (no en todas) para descontarla en esa comparación, igual que en la doctrina marcaria basta con que un término sea descriptivo de uno de los productos o servicios en juego para debilitar su aporte a la distintividad. Las tablas de frecuencia (`IndiceBusqueda.frecuencias_ortograficas` / `frecuencias_foneticas`) se precalculan una sola vez al cargar el índice, no en cada consulta.
+
+Esta fuente de genericidad es **opcional** en `_palabras_comunes_fuera()`: si no se entrega (por ejemplo, tests unitarios simples), el comportamiento es exactamente el de antes de este fix (solo descuento por lema compartido entre las dos marcas).
+
+#### 4.2.3 Fix 05-ago-2026 — residuo demasiado corto tras el descuento
+
+Reportado con "brasas del rey" vs "brasas del rei" (0% de coincidencia, cuando debería ser alto por fonética/semántica). Al descontar las palabras comunes ("brasas", "del"), el residuo queda en "rey" vs "rei" (3 caracteres). El ratio de edición normalizado es muy inestable sobre residuos tan cortos: una sola letra distinta hace caer el score de ~93% a 66.67%, castigando de forma desproporcionada una variante casi idéntica de una marca multi-palabra.
+
+Corrección: un piso de longitud (`config.LONGITUD_MINIMA_RESIDUO_DESCUENTO`, 4 caracteres sin contar espacios). Si el residuo de cualquiera de los dos lados queda por debajo de ese piso, se omite el descuento de genéricos y se devuelve el score base (sin descontar) — ver `busqueda._residuo_muy_corto()`. Esto no reabre el problema original que motivó el descuento de genéricos (ej. "SKAAL BEER" vs "SVAJG BEER": el residuo "skaal"/"svajg" tiene 5 caracteres, por encima del piso), solo evita aplicarlo cuando el residuo es demasiado corto para que el porcentaje sea confiable.
+
+Relacionado con este mismo fix: `clave_fonetica()` no trataba la "y" final de palabra tras vocal (rey, ley, buey) como el diptongo /ei/ que es en español, sino como consonante yeísta — por eso "rey" y "rei" no coincidían ni fonéticamente. Se agregó la regla `_RE_Y_DIPTONGO` en `normalizacion.py` para tratar "vocal + y" en fin de palabra como "vocal + i".
+
+#### 4.2.4 Fix 06-ago-2026 PM — Jaro-Winkler (peso al inicio de palabra)
+
+Se combina la métrica de similitud existente en cada señal (`token_sort_ratio` para la ortográfica, `fuzz.ratio` para la fonética) con **Jaro-Winkler** (Winkler, 1990), que da un bono adicional cuando dos cadenas comparten el inicio. Ver `busqueda._score_ortografico_base()` / `_score_fonetico_base()` y los pesos `config.PESO_*_JARO_WINKLER_*`.
+
+Fundamento: un consumidor real presta más atención al comienzo de una palabra que a su final — el modelo "cohort" de reconocimiento de habla (Marslen-Wilson, 1987) describe cómo el oyente reduce el conjunto de palabras candidatas progresivamente desde el primer fonema. Jaro-Winkler fue diseñado exactamente para capturar esto y ya viene incluido en `rapidfuzz.distance.JaroWinkler`, sin necesidad de agregar una dependencia nueva.
+
+Los pesos (`0.75` para la métrica original, `0.25` para Jaro-Winkler, en ambas señales) le dan un peso menor a Jaro-Winkler porque es un ajuste, no un reemplazo, de la métrica ya validada por los tests existentes. Dado que Jaro-Winkler no tolera por sí solo el reordenamiento de palabras (a diferencia de `token_sort_ratio`), se le pasan los tokens ya ordenados alfabéticamente por `normalizacion.ordenar_tokens()` (precalculado en el índice como `IndiceBusqueda.canonicos_ordenados` para el prefiltro vectorizado) para que ambas métricas reciban el mismo tratamiento de tolerancia al reordenamiento (ej. "CASA BLANCA" ↔ "BLANCA CASA").
+
+#### 4.2.5 Explorado y descartado — n-gramas de caracteres
+
+Se implementó (y se dejó con tests propios, sin usarse en el cálculo del score) un coeficiente de Dice sobre n-gramas de caracteres (`busqueda._similitud_ngramas()`, trigrama por defecto vía `config.LONGITUD_NGRAMA`), pensado como verificación cruzada adicional sobre el residuo, agnóstica a cómo están segmentadas las palabras.
+
+Al validarlo contra una muestra de marcas reales con una sola letra insertada o borrada (la variante más común de "error de tipeo"), resultó muy inestable ante ese tipo de edición específico: una inserción desplaza todos los n-gramas posteriores al punto de inserción, y puede hacer caer el score 30 puntos o más en una palabra de 8-10 caracteres aunque el resto sea idéntico. Caso concreto detectado en la validación: "SEMINRIOS INSIGHT, MEJORES PERSONAS, MEJORES RESULTADOS" (typo de una marca real registrada) caía de ~95% a 66.67% frente al original solo por el piso de n-gramas, y en otro caso una consulta con typo ("AKIDA") dejaba de encontrar la marca real correcta ("AKILDA") y encontraba una marca no relacionada en su lugar.
+
+Usarlo como mínimo (igual que el descuento de genéricos) habría reintroducido, con otro mecanismo, el mismo tipo de falso negativo que motivó el fix de 4.2.3 (residuo demasiado corto). Se decidió **no** incorporarlo al cálculo del score, documentar la razón y dejar la función implementada y probada por si se retoma en el futuro con un diseño más robusto a inserciones/borrados (ej. n-gramas posicionales, o promediar en vez de tomar el mínimo).
 
 ### 4.3 Relación de clase NCL
 
@@ -311,19 +368,20 @@ Respuesta JSON:
 
 El proyecto tiene tests que cubren:
 
-| Módulo | Tests | Qué verifican |
-|---|---|---|
-| `test_datos.py` | 13 | Lectura del Excel, derivación de solicitud_base, filtrado de estados, agrupación por marca |
-| `test_normalizacion.py` | 31 | Limpieza de texto (limpiar), reglas fonéticas (clave_fonetica), casos borde con tildes/ñ/puntuación |
-| `test_busqueda.py` | 15 | Combinación de señales, corrección de palabras genéricas, modulación por clase, ordenamiento, invariante de seguridad del prefiltro (descuento nunca supera el score bruto) y cobertura de la rama de prefiltro con universo grande |
-| `test_validacion.py` | 4 | Preparación de casos de validación y conteo de recall |
+| Módulo | Qué verifican |
+|---|---|
+| `test_datos.py` | Lectura del Excel, derivación de solicitud_base, filtrado de estados, agrupación por marca |
+| `test_normalizacion.py` | Limpieza de texto (limpiar), reglas fonéticas (clave_fonetica, incl. "vocal+y" final como diptongo), lema (singularización) y ordenar_tokens, casos borde con tildes/ñ/puntuación |
+| `test_busqueda.py` | Combinación de señales (incl. blend con Jaro-Winkler), corrección de palabras genéricas (por lema compartido y por frecuencia de clase), residuo demasiado corto, modulación por clase, ordenamiento, similitud por n-gramas (probada pero no usada en el score — ver 4.2.5), invariante de seguridad del prefiltro (descuento nunca supera el score bruto), regresión "SEMINRIOS" (typo en palabra distintiva no se castiga por genéricos alrededor) y cobertura de la rama de prefiltro con universo grande |
+| `test_indice.py` | Construcción de `FrecuenciasPalabras` por clase NCL (no globalmente), uso de lema en vez de cadena exacta al contar, umbral y piso de conteo mínimo |
+| `test_validacion.py` | Preparación de casos de validación y conteo de recall |
 
 Para correr:
 ```bash
 pytest
 ```
 
-Output esperado: `63 passed`.
+Output esperado: `77 passed`.
 
 ---
 
@@ -429,7 +487,7 @@ conda activate buscador
 cd /opt/buscador
 
 # Correr los tests
-pytest    # debe dar 63 passed
+pytest    # debe dar 77 passed
 
 # Probar la API manualmente
 gunicorn --bind 0.0.0.0:5001 --workers 1 --timeout 120 api:app
@@ -647,11 +705,29 @@ Estas decisiones se tomaron durante el desarrollo y vale la pena que TI las cono
 
 **Frontend single-file.** El archivo `index.html` contiene CSS, JavaScript y las 45 descripciones de clases NCL incrustadas. No depende de npm, webpack ni CDN externos. Esto simplifica el despliegue: basta con que Flask sirva ese archivo.
 
-**Pesos del motor son configurables sin tocar lógica.** Los parámetros `PESO_ORTOGRAFICO`, `PESO_FONETICO`, `CANDIDATOS_PREFILTRO`, `TOP_RESULTADOS` y `FACTOR_CLASE_NO_RELACIONADA` están en `config.py`. Cambiarlos no requiere reconstruir el dataset.
+**Pesos del motor son configurables sin tocar lógica.** Los parámetros `PESO_ORTOGRAFICO`, `PESO_FONETICO`, `CANDIDATOS_PREFILTRO`, `TOP_RESULTADOS`, `FACTOR_CLASE_NO_RELACIONADA`, los umbrales de genericidad por frecuencia (`UMBRAL_FRECUENCIA_GENERICO`, `CONTEO_MINIMO_GENERICO`) y los pesos de Jaro-Winkler (`PESO_*_JARO_WINKLER_*`) están en `config.py`. Cambiarlos no requiere reconstruir el dataset (los umbrales de genericidad sí requieren que el índice recalcule sus tablas de frecuencia, lo que ocurre automáticamente al reiniciar la API, sin necesidad de correr `construir_datos.py`).
+
+**El invariante de seguridad del prefiltro se mantiene aunque se agreguen señales nuevas.** Cualquier ajuste o descuento que se agregue al recálculo exacto (paso 2) debe poder solo *bajar* un score, nunca subirlo por encima del score bruto calculado en el prefiltro vectorizado (paso 1, `MotorBusqueda.buscar()`). Es la razón concreta por la que los n-gramas de caracteres (ver 4.2.5) se descartaron del cálculo final en vez de solo bajarles el peso: al usarse con `min()`, cualquier señal nueva que sea inestable en casos borde puede introducir falsos negativos aunque el resto del motor esté bien calibrado. Antes de sumar una señal nueva al score, validarla contra una muestra de marcas reales con variantes de un solo carácter (inserción, borrado y sustitución), no solo contra los casos que motivaron el cambio.
+
+**Genericidad condicionada por clase NCL, no global.** Ver 4.2.2. Una tabla de frecuencia global de palabras confundiría "término descriptivo de un rubro" con "palabra común del español que aparece en marcas de rubros muy distintos sin describir ninguno en particular".
 
 ---
 
-## 14. Contacto y mantenimiento
+## 14. Bitácora de cambios — agosto 2026
+
+Cambios al motor de búsqueda hechos en respuesta a casos reportados por el equipo, en orden cronológico. Todos preservan el invariante de seguridad del prefiltro (ver sección 13) y están cubiertos por tests (`pytest` → 77 passed al cierre de esta bitácora).
+
+| Fecha | Caso reportado | Causa | Corrección | Dónde |
+|---|---|---|---|---|
+| 05-ago-2026 | "brasas del rey" (100%) vs "brasas del rei" (0%) | (a) `clave_fonetica()` no trataba "vocal+y" final de palabra como diptongo /ei/; (b) el residuo tras descontar palabras comunes ("rey"/"rei", 3 caracteres) era demasiado corto para un ratio de edición confiable | (a) regla `_RE_Y_DIPTONGO`; (b) piso `LONGITUD_MINIMA_RESIDUO_DESCUENTO` (4 caracteres) que omite el descuento sobre residuos cortos | `normalizacion.py`, `busqueda._residuo_muy_corto()`, `config.py` |
+| 06-ago-2026 AM | "cervezas ricas" vs "cerveza tribal" → 77% | "cervezas"/"cerveza" no son la misma cadena exacta, así que el descuento de palabra genérica compartida nunca se activaba | `normalizacion.lema()`: singularización naive (vocal + "s") usada solo para decidir qué palabras cuentan como "la misma" al detectar términos comunes | `normalizacion.py`, `busqueda._palabras_comunes_fuera()`, `config.LONGITUD_MINIMA_PALABRA_LEMA` |
+| 06-ago-2026 PM | Solicitud de acercar el motor al criterio de un examinador humano (revisión de literatura académica y doctrina marcaria — *Sabel v. Puma* C-251/95, Winkler 1990, Marslen-Wilson 1987) | El descuento de genéricos de la mañana solo cubría coincidencia exacta/de lema entre las dos marcas comparadas, no sinónimos ortográficos del mismo término genérico; ninguna señal ponderaba especialmente el inicio de palabra | (1) Genericidad por frecuencia de la palabra en la clase NCL real del candidato (`indice.FrecuenciasPalabras`); (2) Jaro-Winkler combinado con la métrica existente en ambas señales (`_score_ortografico_base` / `_score_fonetico_base`); (3) n-gramas de caracteres: implementados y probados, **descartados** del score tras detectar que reintroducían el problema del 05-ago-2026 en casos de inserción/borrado de una letra (ver 4.2.5) | `indice.py` (nuevo), `busqueda.py`, `config.py` |
+
+Ver la sección 4.2 para el detalle técnico y doctrinal de cada fix, y el docstring del módulo `buscador/busqueda.py` para la versión "para desarrolladores" de esta misma bitácora.
+
+---
+
+## 15. Contacto y mantenimiento
 
 **Responsable técnica:** Camila Henzi  
 **Unidad:** Departamento de Marcas, INAPI
