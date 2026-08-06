@@ -60,7 +60,7 @@ buscador_anterioridades/
 │   ├── busqueda.py         ← Motor de búsqueda (combina las 2 señales, rapidfuzz.cdist)
 │   └── validacion.py       ← Módulo de validación de recall (uso interno)
 │
-├── tests/                  ← Suite de tests automatizados (77 tests)
+├── tests/                  ← Suite de tests automatizados (79 tests)
 │   ├── test_datos.py
 │   ├── test_normalizacion.py
 │   ├── test_busqueda.py
@@ -160,6 +160,12 @@ Reportado con "brasas del rey" vs "brasas del rei" (0% de coincidencia, cuando d
 Corrección: un piso de longitud (`config.LONGITUD_MINIMA_RESIDUO_DESCUENTO`, 4 caracteres sin contar espacios). Si el residuo de cualquiera de los dos lados queda por debajo de ese piso, se omite el descuento de genéricos y se devuelve el score base (sin descontar) — ver `busqueda._residuo_muy_corto()`. Esto no reabre el problema original que motivó el descuento de genéricos (ej. "SKAAL BEER" vs "SVAJG BEER": el residuo "skaal"/"svajg" tiene 5 caracteres, por encima del piso), solo evita aplicarlo cuando el residuo es demasiado corto para que el porcentaje sea confiable.
 
 Relacionado con este mismo fix: `clave_fonetica()` no trataba la "y" final de palabra tras vocal (rey, ley, buey) como el diptongo /ei/ que es en español, sino como consonante yeísta — por eso "rey" y "rei" no coincidían ni fonéticamente. Se agregó la regla `_RE_Y_DIPTONGO` en `normalizacion.py` para tratar "vocal + y" en fin de palabra como "vocal + i".
+
+#### 4.2.3.1 Fix 06-ago-2026 PM (continuación) — el piso de longitud protegía también residuos cortos pero distintos
+
+Reportado con "cervezas ricas" vs "cerveza yal", que aparecía como coincidencia muy alta sin relación real. Con la genericidad por frecuencia (4.2.2) ya activa, "cerveza"/"cervezas" se descuenta de ambos lados (genérico en clase 32) y el residuo queda en "ricas" vs "yal" (3 caracteres, bajo el piso de 4.2.3). El ratio normalizado entre esos residuos es 18.75%, que es el número **correcto** — "ricas" y "yal" no se parecen — pero el piso de longitud de 4.2.3 no distinguía "residuo corto porque es una variante de tipeo" (rey/rei) de "residuo corto porque simplemente es una palabra corta y distinta" (ricas/yal): en ambos casos ignoraba el ratio y devolvía el score sin descontar "cerveza" (76.31%), como si las dos marcas fueran básicamente la misma.
+
+Corrección: `busqueda._residuos_variante_corta()` exige, además de que el residuo sea corto, que la distancia de edición **absoluta** (Levenshtein, sin normalizar) entre ambos residuos sea baja (`config.DISTANCIA_MAXIMA_RESIDUO_CORTO`, 1 carácter) para tratarlos como la misma palabra con un error de tipeo. Se usa distancia absoluta y no el ratio normalizado porque el ratio normalizado es precisamente la métrica inestable en cadenas cortas que este mecanismo existe para esquivar: con distancia absoluta, una letra distinta siempre cuenta como 1, sin importar el largo de la palabra. Resultado: "rey"/"rei" (distancia 1) sigue protegido y da ~94%; "ricas"/"yal" (distancia mucho mayor) ya no se protege, y el 18.75% baja el score final como corresponde.
 
 #### 4.2.4 Fix 06-ago-2026 PM — Jaro-Winkler (peso al inicio de palabra)
 
@@ -381,7 +387,7 @@ Para correr:
 pytest
 ```
 
-Output esperado: `77 passed`.
+Output esperado: `79 passed`.
 
 ---
 
@@ -487,7 +493,7 @@ conda activate buscador
 cd /opt/buscador
 
 # Correr los tests
-pytest    # debe dar 77 passed
+pytest    # debe dar 79 passed
 
 # Probar la API manualmente
 gunicorn --bind 0.0.0.0:5001 --workers 1 --timeout 120 api:app
@@ -715,13 +721,14 @@ Estas decisiones se tomaron durante el desarrollo y vale la pena que TI las cono
 
 ## 14. Bitácora de cambios — agosto 2026
 
-Cambios al motor de búsqueda hechos en respuesta a casos reportados por el equipo, en orden cronológico. Todos preservan el invariante de seguridad del prefiltro (ver sección 13) y están cubiertos por tests (`pytest` → 77 passed al cierre de esta bitácora).
+Cambios al motor de búsqueda hechos en respuesta a casos reportados por el equipo, en orden cronológico. Todos preservan el invariante de seguridad del prefiltro (ver sección 13) y están cubiertos por tests (`pytest` → 79 passed al cierre de esta bitácora).
 
 | Fecha | Caso reportado | Causa | Corrección | Dónde |
 |---|---|---|---|---|
 | 05-ago-2026 | "brasas del rey" (100%) vs "brasas del rei" (0%) | (a) `clave_fonetica()` no trataba "vocal+y" final de palabra como diptongo /ei/; (b) el residuo tras descontar palabras comunes ("rey"/"rei", 3 caracteres) era demasiado corto para un ratio de edición confiable | (a) regla `_RE_Y_DIPTONGO`; (b) piso `LONGITUD_MINIMA_RESIDUO_DESCUENTO` (4 caracteres) que omite el descuento sobre residuos cortos | `normalizacion.py`, `busqueda._residuo_muy_corto()`, `config.py` |
 | 06-ago-2026 AM | "cervezas ricas" vs "cerveza tribal" → 77% | "cervezas"/"cerveza" no son la misma cadena exacta, así que el descuento de palabra genérica compartida nunca se activaba | `normalizacion.lema()`: singularización naive (vocal + "s") usada solo para decidir qué palabras cuentan como "la misma" al detectar términos comunes | `normalizacion.py`, `busqueda._palabras_comunes_fuera()`, `config.LONGITUD_MINIMA_PALABRA_LEMA` |
 | 06-ago-2026 PM | Solicitud de acercar el motor al criterio de un examinador humano (revisión de literatura académica y doctrina marcaria — *Sabel v. Puma* C-251/95, Winkler 1990, Marslen-Wilson 1987) | El descuento de genéricos de la mañana solo cubría coincidencia exacta/de lema entre las dos marcas comparadas, no sinónimos ortográficos del mismo término genérico; ninguna señal ponderaba especialmente el inicio de palabra | (1) Genericidad por frecuencia de la palabra en la clase NCL real del candidato (`indice.FrecuenciasPalabras`); (2) Jaro-Winkler combinado con la métrica existente en ambas señales (`_score_ortografico_base` / `_score_fonetico_base`); (3) n-gramas de caracteres: implementados y probados, **descartados** del score tras detectar que reintroducían el problema del 05-ago-2026 en casos de inserción/borrado de una letra (ver 4.2.5) | `indice.py` (nuevo), `busqueda.py`, `config.py` |
+| 06-ago-2026 PM (continuación) | "cervezas ricas" vs "cerveza yal" → score muy alto pese a no tener relación real | El piso de longitud del 05-ago-2026 (`_residuo_muy_corto`) ignoraba el descuento de genéricos apenas UN residuo era corto, sin mirar si ese residuo corto se parecía o no al del otro lado: protegía por igual "rey"/"rei" (misma palabra, typo) y "ricas"/"yal" (palabras distintas que solo coinciden en ser cortas) | `busqueda._residuos_variante_corta()`: exige además que la distancia de edición absoluta (Levenshtein) entre ambos residuos sea baja (`config.DISTANCIA_MAXIMA_RESIDUO_CORTO`, 1 carácter) para considerarlos variante de tipeo; si son distintos, el descuento se aplica con normalidad | `busqueda.py`, `config.py` |
 
 Ver la sección 4.2 para el detalle técnico y doctrinal de cada fix, y el docstring del módulo `buscador/busqueda.py` para la versión "para desarrolladores" de esta misma bitácora.
 

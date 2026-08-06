@@ -122,6 +122,24 @@ BAJAR un score, nunca subirlo por encima del bruto calculado por cdist):
      inserciones/borrados; no participa del calculo de _similitud_ortografica
      ni _similitud_fonetica por ahora.
 
+Fix 06-ago-2026 PM (continuacion, mismo dia): reportado "cervezas ricas" vs
+"cerveza yal" dando un score alto pese a no tener relacion real. Con el fix
+de genericidad por frecuencia ya activo, "cerveza"/"cervezas" se descuenta
+de ambos lados (generico en clase 32) y el residuo queda en "ricas" vs
+"yal" (3 caracteres, bajo config.LONGITUD_MINIMA_RESIDUO_DESCUENTO). El
+ratio normalizado entre esos residuos (18.75%) es correcto -- son palabras
+distintas -- pero _residuo_muy_corto() por si sola hacia que se ignorara
+ese numero y se devolviera el score SIN descontar "cerveza" (76.31%), el
+mismo mecanismo pensado para proteger 'rey'/'rei' (fix 05-ago-2026)
+protegiendo por error un caso donde no habia nada que proteger. Se agrega
+_residuos_variante_corta(): ademas de que el residuo sea corto, exige que
+la distancia de edicion ABSOLUTA (Levenshtein, no normalizada) entre ambos
+residuos sea baja (config.DISTANCIA_MAXIMA_RESIDUO_CORTO) para tratarlos
+como la misma palabra con un error de tipeo. 'rey'/'rei' sigue protegido
+(distancia 1); 'ricas'/'yal' ya no (distancia mucho mayor), y el descuento
+se aplica con normalidad, dejando que el 18.75% baje el score como
+corresponde.
+
 Referencias completas de la literatura citada en las notas de diseño
 entregadas el 06-ago-2026 (Cohen, Ravikumar y Fienberg 2003; Winkler 1990;
 Marslen-Wilson 1987; Sabel v. Puma C-251/95; Lloyd Schuhfabrik C-342/97).
@@ -133,7 +151,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from rapidfuzz import fuzz, process
-from rapidfuzz.distance import JaroWinkler
+from rapidfuzz.distance import JaroWinkler, Levenshtein
 
 from . import config, normalizacion
 from .indice import FrecuenciasPalabras, IndiceBusqueda
@@ -286,6 +304,45 @@ def _residuo_muy_corto(*residuos: str) -> bool:
     )
 
 
+def _residuos_variante_corta(fa: str, fb: str) -> bool:
+    """True si conviene IGNORAR el descuento de genericos entre fa y fb
+    porque son residuos cortos que ademas son casi la misma palabra (una
+    variante de tipeo), no dos palabras cortas pero distintas.
+
+    Fix 06-ago-2026 PM (continuacion). Antes, `_residuo_muy_corto(fa, fb)`
+    por si sola decidia esto: CUALQUIER residuo por debajo de
+    config.LONGITUD_MINIMA_RESIDUO_DESCUENTO bastaba para descartar el
+    descuento y devolver el score sin descontar (score_base), sin mirar si
+    el otro residuo se parecia o no. Caso reportado: "cervezas ricas" vs
+    "cerveza yal". Tras descontar "cerveza" (generico en clase 32 por
+    frecuencia), el residuo queda en "ricas" vs "yal" (3 caracteres, bajo el
+    piso). El ratio normalizado entre ellos es 18.75%, que es el numero
+    CORRECTO: "ricas" y "yal" no se parecen. Pero como "yal" es corto, la
+    version anterior ignoraba ese 18.75% y devolvia 76.31% (el score de
+    "cervezas ricas" vs "cerveza yal" SIN descontar "cerveza"/"cervezas"),
+    como si ambas marcas fueran esencialmente la misma.
+
+    La distincion correcta no es "el residuo es corto" sino "el residuo es
+    corto Y ADEMAS se parece mucho al otro residuo" (ej. 'rey'/'rei': misma
+    palabra, un error de tipeo). Solo en ese caso el ratio normalizado es el
+    que esta mal (cae desproporcionado por el largo tan corto, ver fix
+    05-ago-2026) y conviene ignorarlo. Cuando los residuos cortos son
+    palabras distintas (ej. 'ricas'/'yal'), el ratio bajo ya es correcto y
+    no hay nada que proteger: dejar que el descuento baje el score es lo
+    esperado.
+
+    Se mide "parecido" con distancia de edicion ABSOLUTA (Levenshtein, sin
+    normalizar), no con el ratio normalizado: el ratio normalizado es
+    precisamente la metrica inestable en cadenas cortas que este mecanismo
+    existe para esquivar. Con distancia absoluta, una sola letra distinta
+    siempre cuenta como 1, sin importar el largo de la palabra (ver
+    config.DISTANCIA_MAXIMA_RESIDUO_CORTO).
+    """
+    if not _residuo_muy_corto(fa, fb):
+        return False
+    return Levenshtein.distance(fa, fb) <= config.DISTANCIA_MAXIMA_RESIDUO_CORTO
+
+
 def _similitud_ortografica(
     a: str,
     b: str,
@@ -312,9 +369,13 @@ def _similitud_ortografica(
     ellos, el comportamiento es el mismo de antes del fix 06-ago-2026 PM.
 
     Tampoco se aplica el descuento si el residuo (lo que queda de cada
-    marca tras quitar las palabras genericas) es mas corto que
-    config.LONGITUD_MINIMA_RESIDUO_DESCUENTO: ver _residuo_muy_corto() y el
-    fix 05-ago-2026.
+    marca tras quitar las palabras genericas) es corto Y ademas se parece
+    mucho al residuo del otro lado (variante de tipeo, ej. 'rey'/'rei'): ver
+    _residuos_variante_corta(), fix 05-ago-2026 y su continuacion el
+    06-ago-2026 PM. Si el residuo es corto pero es una palabra distinta del
+    otro lado (ej. 'ricas'/'yal'), el descuento SI se aplica: el ratio bajo
+    entre residuos cortos pero distintos ya es el numero correcto, no hay
+    que protegerlo.
 
     NO se usa _similitud_ngramas() como piso adicional aqui (a diferencia de
     lo planeado originalmente en el fix 06-ago-2026 PM): al probarlo contra
@@ -343,8 +404,8 @@ def _similitud_ortografica(
     fa, fb = _palabras_comunes_fuera(a, b, frecuencias=frecuencias, clases=clases)
     if not fa or not fb:
         return score_base  # una marca es casi subconjunto de la otra
-    if _residuo_muy_corto(fa, fb):
-        return score_base  # residuo demasiado corto: ratio poco confiable
+    if _residuos_variante_corta(fa, fb):
+        return score_base  # residuo corto y ademas variante de tipeo del otro
 
     score_residuo = _score_ortografico_base(fa, fb)
     return min(score_base, score_residuo)
@@ -387,9 +448,11 @@ def _similitud_fonetica(
     cubierto por tests porque los universos de prueba son mas chicos que
     config.CANDIDATOS_PREFILTRO).
 
-    Tampoco se aplica el descuento si el residuo fonetico de cualquiera de
-    los dos lados es mas corto que config.LONGITUD_MINIMA_RESIDUO_DESCUENTO:
-    ver _residuo_muy_corto() y el fix 05-ago-2026.
+    Tampoco se aplica el descuento si el residuo fonetico es corto Y ademas
+    se parece mucho al residuo del otro lado (variante de tipeo): ver
+    _residuos_variante_corta(), fix 05-ago-2026 y su continuacion el
+    06-ago-2026 PM. Si es corto pero es una clave fonetica distinta del otro
+    lado, el descuento SI se aplica.
 
     NO se usa _similitud_ngramas() aqui: ver la nota al respecto en el
     docstring de _similitud_ortografica (misma razon, mismo fix 06-ago-2026
@@ -415,8 +478,8 @@ def _similitud_fonetica(
 
     if not fa or not fb:
         return score_base  # una marca es subconjunto fonetico de la otra
-    if _residuo_muy_corto(fa, fb):
-        return score_base  # residuo demasiado corto: ratio poco confiable
+    if _residuos_variante_corta(fa, fb):
+        return score_base  # residuo corto y ademas variante de tipeo del otro
 
     score_residuo = _score_fonetico_base(fa, fb)
     return min(score_base, score_residuo)

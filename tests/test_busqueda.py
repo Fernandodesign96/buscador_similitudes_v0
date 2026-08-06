@@ -25,6 +25,7 @@ from buscador.busqueda import _score_ortografico_base
 from buscador.busqueda import _similitud_fonetica
 from buscador.busqueda import _similitud_ngramas
 from buscador.busqueda import _similitud_ortografica
+from buscador.busqueda import _residuos_variante_corta
 from buscador.indice import FrecuenciasPalabras
 
 
@@ -313,6 +314,36 @@ def test_similitud_ngramas_detecta_insercion_como_baja_similitud():
     # el mismo par.
     assert _similitud_ngramas("seminrios", "seminarios") < 70.0
     assert _score_ortografico_base("seminrios", "seminarios") > 90.0
+
+
+def test_residuo_corto_pero_distinto_si_se_descuenta():
+    # Caso reportado 06-ago-2026 PM (continuacion): "cervezas ricas" vs
+    # "cerveza yal". Tras descontar "cerveza" (generico en clase 32), el
+    # residuo queda en "ricas" vs "yal" (3 caracteres, corto). A diferencia
+    # de 'rey'/'rei', "ricas" y "yal" son palabras distintas (no una
+    # variante de tipeo la una de la otra): el descuento SI debe aplicarse
+    # y el score final debe quedar bajo, no igualarse al de "cervezas" vs
+    # "cerveza" solas.
+    frecuencias = FrecuenciasPalabras(
+        conteo_por_clase={32: {"cerveza": 50}},
+        total_por_clase={32: 100},
+    )
+    s = _similitud_ortografica(
+        "cervezas ricas", "cerveza yal",
+        frecuencias=frecuencias, clases=[32],
+    )
+    assert s < 50.0  # antes del fix daba ~76% (score sin descontar "cerveza")
+
+
+def test_residuos_variante_corta_distingue_typo_de_palabra_distinta():
+    # 'rey'/'rei': misma palabra, un error de tipeo (distancia 1) -> True.
+    assert _residuos_variante_corta("rey", "rei") is True
+    # 'ricas'/'yal': residuo corto de un lado, pero son palabras distintas
+    # (distancia alta) -> False, no hay que protegerlas del descuento.
+    assert _residuos_variante_corta("ricas", "yal") is False
+    # Ninguno de los dos es corto: no aplica el mecanismo, da igual la
+    # distancia entre ellos.
+    assert _residuos_variante_corta("blanca", "amarilla") is False
 
 
 def test_prefiltro_no_pierde_una_anterioridad_clara_en_universo_grande():

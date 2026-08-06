@@ -81,6 +81,26 @@ FACTOR_CLASE_NO_RELACIONADA: float = 0.7
 # busqueda.py.
 LONGITUD_MINIMA_RESIDUO_DESCUENTO: int = 4
 
+# Distancia de edicion ABSOLUTA (Levenshtein, sin normalizar) maxima entre
+# dos residuos cortos para tratarlos como la misma palabra con un error de
+# tipeo (y por lo tanto omitir el descuento de genericos, igual que antes).
+# Fix 06-ago-2026 PM (continuacion), caso reportado "cervezas ricas" vs
+# "cerveza yal": antes, CUALQUIER residuo por debajo de
+# LONGITUD_MINIMA_RESIDUO_DESCUENTO hacia que se ignorara el descuento sin
+# mirar que tan parecido era al otro residuo. "ricas" vs "yal" tambien caia
+# en esa regla (por "yal", de 3 caracteres) y el resultado era el score SIN
+# descontar "cerveza"/"cervezas" (76.31%), pese a que "ricas" y "yal" no se
+# parecen en nada (18.75% entre ellos, que es el numero correcto). La
+# distincion correcta es "residuo corto Y ademas muy parecido al otro
+# residuo" (ej. 'rey'/'rei', distancia 1) vs "residuo corto pero distinto"
+# (ej. 'ricas'/'yal', distancia alta): solo en el primer caso el ratio
+# normalizado es el que esta mal (ver fix 05-ago-2026), no el segundo. Se
+# usa distancia ABSOLUTA (no ratio) porque el ratio normalizado es
+# precisamente la metrica que resulta inestable en cadenas cortas; con
+# distancia absoluta, "una sola letra distinta" siempre vale 1 sin importar
+# el largo de la palabra. Ver busqueda._residuos_variante_corta().
+DISTANCIA_MAXIMA_RESIDUO_CORTO: int = 1
+
 # Longitud minima (en caracteres) que debe tener una palabra para que
 # normalizacion.lema() intente singularizarla (quitarle la 's' final de
 # plural cuando va precedida de vocal, ej. 'cervezas' -> 'cerveza'). Evita
