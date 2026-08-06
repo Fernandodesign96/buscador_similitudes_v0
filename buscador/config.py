@@ -68,6 +68,19 @@ SIMILITUD_MIN_RESULTADOS: float = 75.0
 # combinado se atenua por este factor (clases no relacionadas = menor riesgo).
 FACTOR_CLASE_NO_RELACIONADA: float = 0.7
 
+# Longitud minima (en caracteres, sin contar espacios) que debe tener el
+# residuo de CADA marca, en busqueda.py, tras descontar las palabras/claves
+# exactamente comunes, para que el descuento de genericos se aplique. Por
+# debajo de este umbral el ratio de edicion normalizado es estadisticamente
+# inestable (una sola letra de diferencia en un residuo de 2-3 caracteres
+# puede hacer caer el score 20-30 puntos), lo que castiga de forma
+# desproporcionada variantes casi identicas de una marca multi-palabra.
+# Fix 05-ago-2026, caso reportado "brasas del rey" vs "brasas del rei": tras
+# descontar "brasas" y "del" (comunes), el residuo "rey"/"rei" (3 caracteres)
+# hacia caer el score de ~93% a 66.67%. Ver _residuo_muy_corto() en
+# busqueda.py.
+LONGITUD_MINIMA_RESIDUO_DESCUENTO: int = 4
+
 # --- Pre-filtro vectorizado (cdist) ---------------------------------------
 # Decision de julio 2026: el motor calcula un score bruto (sin descuento de
 # palabras genericas) contra el universo completo usando rapidfuzz.process.cdist

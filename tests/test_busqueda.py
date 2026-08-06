@@ -186,6 +186,28 @@ def test_similitud_fonetica_nunca_supera_el_score_bruto():
         assert score_exacto <= score_bruto + 1e-9, (a, b, score_exacto, score_bruto)
 
 
+def test_residuo_corto_no_castiga_variante_casi_identica():
+    # Caso reportado 05-ago-2026: "brasas del rey" vs "brasas del rei".
+    # Tras descontar "brasas" y "del" (comunes), el residuo "rey"/"rei" (3
+    # caracteres) es demasiado corto para que el ratio sea confiable: se
+    # omite el descuento y se usa el score base (bruto, sin descontar).
+    s_ort = _similitud_ortografica(
+        normalizacion.limpiar("brasas del rey"),
+        normalizacion.limpiar("brasas del rei"),
+    )
+    s_fon = _similitud_fonetica("brasas del rey", "brasas del rei")
+    assert s_ort > 90.0
+    assert s_fon > 90.0
+
+
+def test_residuo_largo_sigue_descontandose():
+    # Control: si el residuo tras descontar comunes es largo (>= al piso),
+    # el descuento de genericos sigue aplicandose como antes.
+    s_con = _similitud_ortografica("skaal beer", "svajg beer")
+    s_sin = _similitud_ortografica("skaal", "svajg")
+    assert s_con == pytest.approx(s_sin, abs=0.5)
+
+
 def test_prefiltro_no_pierde_una_anterioridad_clara_en_universo_grande():
     """El motor debe seguir encontrando un match evidente aunque el universo
     supere config.CANDIDATOS_PREFILTRO, ejercitando de verdad la rama de

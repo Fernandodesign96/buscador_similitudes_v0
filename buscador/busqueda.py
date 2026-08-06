@@ -44,6 +44,21 @@ clave_fonetica(consulta) y se lo pasaba a _similitud_fonetica. Ahora se le
 pasa consulta directamente (texto crudo); _similitud_fonetica ya calcula
 clave_fonetica internamente para el score base, y usa el texto crudo solo
 para el split() del descuento pareado.
+
+Fix 05-ago-2026 (residuo demasiado corto tras el descuento de genericos):
+reportado con "brasas del rey" vs "brasas del rei". Al descontar las
+palabras exactas comunes ("brasas", "del"), el residuo queda en "rey" vs
+"rei" (3 caracteres). El ratio de edicion normalizado es muy inestable
+sobre residuos tan cortos: una sola letra distinta ya hace caer el score de
+~93% a 66.67%, castigando de forma desproporcionada una variante casi
+identica de una marca multi-palabra. Se agrega un piso de longitud
+(config.LONGITUD_MINIMA_RESIDUO_DESCUENTO): si el residuo de cualquiera de
+los dos lados queda por debajo de ese piso, se omite el descuento y se
+devuelve el score base (sin descontar), igual que cuando el residuo queda
+vacio. Esto no reabre el problema original que motivo el descuento (p. ej.
+"SKAAL BEER" vs "SVAJG BEER": el residuo "skaal"/"svajg" tiene 5 caracteres,
+por encima del piso), solo evita aplicarlo cuando el residuo es demasiado
+corto para que el porcentaje sea confiable.
 """
 from __future__ import annotations
 
@@ -83,6 +98,20 @@ def _palabras_comunes_fuera(a: str, b: str) -> tuple[str, str]:
     return fa, fb
 
 
+def _residuo_muy_corto(*residuos: str) -> bool:
+    """True si algun residuo (tras descontar palabras/claves comunes) tiene
+    menos caracteres alfabeticos que config.LONGITUD_MINIMA_RESIDUO_DESCUENTO.
+
+    Los espacios no cuentan como caracteres de contenido (un residuo de dos
+    palabras de 2 letras cada una sigue siendo "corto" en el sentido que nos
+    importa: pocas letras sobre las que calcular un ratio confiable).
+    """
+    return any(
+        len(r.replace(" ", "")) < config.LONGITUD_MINIMA_RESIDUO_DESCUENTO
+        for r in residuos
+    )
+
+
 def _similitud_ortografica(a: str, b: str) -> float:
     """Similitud ortografica 0-100 sobre formas canonicas.
 
@@ -102,6 +131,11 @@ def _similitud_ortografica(a: str, b: str) -> float:
     artificial del score no se corrige. Se documenta como error conocido en
     vez de intentar una heuristica adicional sin evidencia empirica de que
     sea necesaria.
+
+    Tampoco se aplica el descuento si el residuo (lo que queda de cada
+    marca tras quitar las palabras comunes) es mas corto que
+    config.LONGITUD_MINIMA_RESIDUO_DESCUENTO: ver _residuo_muy_corto() y el
+    fix 05-ago-2026 en el docstring del modulo.
     """
     if not a or not b:
         return 0.0
@@ -114,6 +148,8 @@ def _similitud_ortografica(a: str, b: str) -> float:
     fa, fb = _palabras_comunes_fuera(a, b)
     if not fa or not fb:
         return score_base  # una marca es casi subconjunto de la otra
+    if _residuo_muy_corto(fa, fb):
+        return score_base  # residuo demasiado corto: ratio poco confiable
 
     score_sin_comunes = float(fuzz.token_sort_ratio(fa, fb))
     return min(score_base, score_sin_comunes)
@@ -146,6 +182,11 @@ def _similitud_fonetica(texto_a: str, texto_b: str) -> float:
     directamente, sin el minimo, y ese caso no estaba cubierto por tests
     porque los universos de prueba son mas chicos que
     config.CANDIDATOS_PREFILTRO).
+
+    Tampoco se aplica el descuento si el residuo fonetico de cualquiera de
+    los dos lados es mas corto que config.LONGITUD_MINIMA_RESIDUO_DESCUENTO:
+    ver _residuo_muy_corto() y el fix 05-ago-2026 en el docstring del
+    modulo.
     """
     if not texto_a or not texto_b:
         return 0.0
@@ -167,6 +208,8 @@ def _similitud_fonetica(texto_a: str, texto_b: str) -> float:
 
     if not fa or not fb:
         return score_base  # una marca es subconjunto fonetico de la otra
+    if _residuo_muy_corto(fa, fb):
+        return score_base  # residuo demasiado corto: ratio poco confiable
 
     score_sin_comunes = float(fuzz.ratio(fa, fb))
     return min(score_base, score_sin_comunes)

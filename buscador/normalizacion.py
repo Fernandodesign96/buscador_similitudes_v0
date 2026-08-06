@@ -48,6 +48,11 @@ _RE_GU_EI = re.compile(r"gu([ei])")
 _RE_G_EI = re.compile(r"g([ei])")
 _RE_C_EI = re.compile(r"c([ei])")
 _RE_DOBLES = re.compile(r"(.)\1+")
+# 'y' precedida de vocal y al final de palabra actua como semivocal /i/ que
+# cierra un diptongo (rey, ley, buey, paraguay), no como consonante yeista
+# (yave, mayo). Debe aplicarse ANTES de fusionar palabras (necesita el
+# espacio o el fin de cadena para saber donde termina la palabra).
+_RE_Y_DIPTONGO = re.compile(r"([aeiou])y(?=\s|$)")
 
 
 def _quitar_acentos(texto: str) -> str:
@@ -91,7 +96,12 @@ def clave_fonetica(texto: str | None) -> str:
         Clave fonetica en minusculas; cadena vacia si no hay contenido
         alfabetico (p. ej. marcas puramente numericas).
     """
-    s = _RE_SOLO_LETRAS.sub("", limpiar(texto))
+    limpio_con_espacios = limpiar(texto)
+    # Regla vocalica de 'y' final de palabra: debe correr mientras los
+    # espacios todavia delimitan cada palabra (se pierden en el paso
+    # siguiente). Ej.: "rey carlos" -> "rei carlos".
+    limpio_con_espacios = _RE_Y_DIPTONGO.sub(r"\1i", limpio_con_espacios)
+    s = _RE_SOLO_LETRAS.sub("", limpio_con_espacios)
     if not s:
         return ""
 
