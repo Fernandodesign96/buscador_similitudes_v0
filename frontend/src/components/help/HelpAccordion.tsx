@@ -1,9 +1,9 @@
 import { copy } from "@/lib/copy";
 
 const NIVELES = [
-  { color: "#D32F2F", ...copy.help.nivelAlto },
-  { color: "#FF9800", ...copy.help.nivelMedio },
-  { color: "#43A047", ...copy.help.nivelBajo },
+  copy.help.nivelAlto,
+  copy.help.nivelMedio,
+  copy.help.nivelBajo,
 ] as const;
 
 export function HelpAccordion() {
@@ -50,14 +50,9 @@ export function HelpAccordion() {
           </h2>
           <ul className="space-y-3">
             {NIVELES.map((n) => (
-              <li key={n.rango} className="flex flex-wrap items-start gap-2 text-sm">
-                <span
-                  className="mt-1 inline-block h-3 w-3 shrink-0 rounded-full"
-                  style={{ backgroundColor: n.color }}
-                  aria-hidden
-                />
+              <li key={n.rango} className="text-sm">
                 <span className="font-semibold text-[#111]">{n.rango}</span>
-                <span className="text-inapi-muted">— {n.accion}</span>
+                <span className="text-inapi-muted"> — {n.accion}</span>
               </li>
             ))}
           </ul>

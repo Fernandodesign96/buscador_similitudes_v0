@@ -1,6 +1,6 @@
 export type SimilarityLevel = "high" | "medium" | "low";
 
-/** Umbral mínimo (%) para mostrar marcas en resultados — alineado con api.py */
+/** Umbral interno del motor (no se muestra al usuario). Alineado con api.py */
 export const SIMILITUD_MIN_RESULTADOS = 75;
 
 export function similarityLevel(value: number): SimilarityLevel {
@@ -9,16 +9,8 @@ export function similarityLevel(value: number): SimilarityLevel {
   return "low";
 }
 
-export function similarityColor(value: number): string {
-  const level = similarityLevel(value);
-  if (level === "high") return "#D32F2F";
-  if (level === "medium") return "#FF9800";
-  return "#43A047";
-}
-
-export function badgeColors(similarity: number): { bg: string; text: string } {
-  if (similarity >= SIMILITUD_MIN_RESULTADOS) {
-    return { bg: "#FFE5E5", text: "#D32F2F" };
-  }
-  return { bg: "#FFF3E0", text: "#FF9800" };
+/** Ancho de barra 0–100. El valor numérico no se renderiza en la UI. */
+export function barWidth(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, value));
 }

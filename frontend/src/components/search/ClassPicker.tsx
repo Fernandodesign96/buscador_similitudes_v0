@@ -70,6 +70,9 @@ export function ClassPicker({ selected, onChange }: ClassPickerProps) {
               <PopoverDescription className="text-sm leading-relaxed text-inapi-muted">
                 {copy.search.nclTooltipText}
               </PopoverDescription>
+              <p className="text-sm leading-relaxed text-inapi-muted">
+                {copy.search.classesHint}
+              </p>
             </PopoverContent>
           </Popover>
         </span>
