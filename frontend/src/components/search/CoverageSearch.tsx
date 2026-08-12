@@ -57,13 +57,15 @@ function ClassGroup({
   defaultOpen: boolean;
   onToggle: (item: NclCobertura) => void;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? items : items.slice(0, PREVIEW_LIMIT);
   const hiddenCount = items.length - PREVIEW_LIMIT;
 
   return (
     <details
-      defaultOpen={defaultOpen}
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
       className="group border-b border-inapi-border last:border-b-0"
     >
       <summary className="cursor-pointer list-none bg-[#F0F7FD] px-4 py-3 [&::-webkit-details-marker]:hidden">
