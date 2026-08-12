@@ -14,21 +14,23 @@ export const copy = {
     subtitleLanding:
       "Usa esta herramienta antes de pedir el registro de tu marca.",
     subtitleSearch:
-      "Escribe el nombre y, si quieres, elige los productos o servicios. Luego revisa las marcas parecidas.",
+      "Escribe el nombre de tu marca. Después indica el producto o servicio para ver marcas parecidas.",
   },
   landing: {
-    queEsTitulo: "¿Qué hace esta herramienta?",
+    queEsTitulo: "¿Qué hace este buscador?",
     queEsP1:
-      "Compara el nombre que escribes con marcas ya pedidas o registradas en INAPI. Te muestra el parecido según cómo se escribe y cómo suena en español.",
+      "Te muestra qué tan parecida es tu marca —en su escritura o sonido— a otras marcas ya solicitadas o registradas en INAPI.",
+    queNoTitulo: "¿Qué no hace este buscador?",
     queEsP2:
-      "Cuanto más se parecen al escribirse o al pronunciarse, más conviene revisar esa marca antes de solicitar.",
-    antesTitulo: "Antes de empezar",
-    checklist: [
-      "Esta revisión mira solo el nombre escrito (no el dibujo ni el logo).",
-      "El resultado es una orientación: no decide si INAPI aceptará o rechazará tu solicitud.",
-      "Si tu caso es complejo, puedes pedir ayuda a un ejecutivo de INAPI de manera presencial o telefónica.",
+      "No revisa logos, imágenes ni otros elementos gráficos de las marcas.",
+    tenEnCuentaTitulo: "Ten en cuenta",
+    tenEnCuentaItems: [
+      "Los resultados son solo una referencia y pueden tener errores.",
+      "Si tu marca tiene números, escríbelos también con palabras (ejemplo '3' o 'tres') para obtener resultados más precisos.",
+      "El uso de esta herramienta es tu responsabilidad.",
+      "No reemplaza el examen de INAPI, ni garantiza si tu marca será aceptada o rechazada.",
     ] as const,
-    legalSummary: "Leer el aviso legal completo",
+    legalTitle: "Aviso legal",
     legalAcordado:
       "Este buscador permite identificar posibles coincidencias o similitudes de nombre con marcas previamente solicitadas o registradas ante INAPI. Sus resultados tienen un carácter meramente informativo y orientador para los usuarios, no incluye el análisis de los elementos figurativos, gráficos o de imagen. Los resultados pueden contener algunos errores o imprecisiones. En consecuencia, su uso es de exclusiva responsabilidad de quien lo utiliza y, en ningún caso, sustituye, anticipa ni prejuzga el examen sustantivo que corresponde realizar a INAPI conforme a la normativa vigente, ni asegura el resultado de dicho examen o la eventual concesión o rechazo de una solicitud de marca.",
     acceptLabel: "Leí el aviso y quiero continuar",
@@ -38,26 +40,60 @@ export const copy = {
     label: "Nombre de tu marca",
     placeholder: "Ejemplo: Mi Marca",
     hint: "Ejemplo: Mi Marca",
-    classesLabel: "Productos o servicios",
+    classesLabel: "Si ya sabes qué producto o servicio registrar, selecciona la clase",
     nclTooltipTitle: "¿Qué son los productos o servicios?",
     nclTooltipText:
-      "La Clasificación Internacional de Niza (NCL) agrupa productos y servicios en 45 clases. Elige una o más clases para acotar la búsqueda. Si no eliges ninguna, buscamos en todas.",
+      "La Clasificación Internacional de Niza (NCL) agrupa productos y servicios en 45 clases. Si ya sabes el número de clase, elígela aquí. También puedes buscar en todas las clases.",
     nclTooltipAria: "Información sobre productos o servicios (Clasificación de Niza)",
     classesAll: "Elige una clase para añadirla",
+    classesAllSearch: "Todas las clases",
     classesCount: (n: number) =>
       n === 1 ? "1 clase seleccionada" : `${n} clases seleccionadas`,
     classesHint:
-      "Cada clase que elijas se suma abajo. Puedes quitarla con la X. Si no eliges ninguna, buscamos en todas.",
+      "Cada clase que elijas se suma abajo. Puedes quitarla con la X. Si ya conoces el número de clase, elígela aquí.",
+    classesSearchAll: "Buscar en todas las clases",
+    classesClearAll: "Quitar todas las clases elegidas",
     howItWorksTitle: "¿Cómo encuentra marcas este buscador?",
     howItWorks:
-      "El buscador encuentra marcas parecidas por cómo se escriben y cómo suenan al pronunciarlas en español.",
+      "El buscador encuentra marcas parecidas por cómo se escriben (denominación) y cómo suenan al pronunciarlas en español.",
     howItWorksExample:
       "Ejemplo: Casa Blanca y Blanca Casa. O Cauquenes y Kaukenes.",
+    howItWorksNumeros:
+      "Si tu marca contiene números, búscala de dos formas: con el número (ej. «Café 24») y con el número escrito en palabras (ej. «Café veinticuatro»). Ambas búsquedas pueden arrojar resultados distintos, y hacerlo así te da una visión más completa de marcas similares ya registradas.",
     howItWorksAria: "¿Cómo encuentra marcas este buscador?",
-    submit: "Buscar marcas parecidas",
+    submit: "Continuar",
     loading: "Buscando marcas parecidas…",
     clear: "Limpiar",
     clearAria: "Limpiar nombre, clases y resultados",
+  },
+  coverage: {
+    label: "Producto o servicio de tu marca",
+    placeholder: "Ejemplo: café tostado, reparación de calzado",
+    tooltipTitle: "¿Por qué debes elegir una clase?",
+    tooltipText:
+      "Para registrar una marca debes indicar al menos una clase de niza (tu producto o servicio). Escribe lo que vendes o el servicio que ofreces. Te mostramos las opciones más parecidas para que marques una clase con su cobertura.",
+    tooltipHint:
+      "Si ya conoces el número de clase, puedes elegirla más abajo, en «Si ya sabes qué producto o servicio registrar, selecciona la clase».",
+    tooltipAria: "Información sobre clase y cobertura",
+    submit: "Buscar producto o servicio",
+    clearAria: "Limpiar búsqueda de producto o servicio",
+    loadingCatalog: "Cargando catálogo…",
+    searching: "Buscando coberturas…",
+    empty:
+      "No encontramos coberturas parecidas. Prueba otras palabras o elige la clase si ya la conoces.",
+    selectedTitle: (n: number) =>
+      n === 1 ? "1 cobertura elegida" : `${n} coberturas elegidas`,
+    showClassesFor: "Mostrar clases de:",
+    filterProducto: "Productos",
+    filterServicio: "Servicios",
+    classBar: (n: number) => `Clase ${n}`,
+    classGroupCount: (n: number) =>
+      n === 1 ? "1 cobertura" : `${n} coberturas`,
+    showAll: (n: number) => `Mostrar las ${n}`,
+    showLess: "Mostrar menos",
+    seeMarks: "Ver marcas parecidas",
+    needClass:
+      "Elige al menos una cobertura o una clase, o marca «Buscar en todas las clases», para ver marcas parecidas.",
   },
   results: {
     summaryTitle: "Observaciones de similitud",

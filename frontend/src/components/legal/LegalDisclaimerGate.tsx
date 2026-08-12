@@ -32,9 +32,26 @@ export function LegalDisclaimerGate({ onAccept }: LegalDisclaimerGateProps) {
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-inapi-muted">
           {c.queEsP1}
         </p>
+      </section>
+
+      <section className="mb-8" aria-labelledby="que-no">
+        <h2 id="que-no" className="text-lg font-semibold text-[#111]">
+          {c.queNoTitulo}
+        </h2>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-inapi-muted">
           {c.queEsP2}
         </p>
+      </section>
+
+      <section className="mb-8" aria-labelledby="ten-en-cuenta">
+        <h2 id="ten-en-cuenta" className="text-lg font-semibold text-[#111]">
+          {c.tenEnCuentaTitulo}
+        </h2>
+        <ul className="mt-3 max-w-3xl list-disc space-y-2 pl-5 text-sm leading-relaxed text-inapi-muted">
+          {c.tenEnCuentaItems.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
       </section>
 
       <section
@@ -42,30 +59,11 @@ export function LegalDisclaimerGate({ onAccept }: LegalDisclaimerGateProps) {
         aria-labelledby="aviso"
       >
         <h2 id="aviso" className="text-lg font-semibold text-[#111]">
-          {c.antesTitulo}
+          {c.legalTitle}
         </h2>
-        <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-relaxed text-[#111]">
-          {c.checklist.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-
-        <details className="group mt-5 rounded-sm border border-[#E6E6E6] bg-white">
-          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-[#111] [&::-webkit-details-marker]:hidden">
-            <span className="flex items-center justify-between gap-3">
-              {c.legalSummary}
-              <span
-                className="shrink-0 text-xs text-inapi-muted transition-transform group-open:rotate-180"
-                aria-hidden
-              >
-                ▼
-              </span>
-            </span>
-          </summary>
-          <div className="border-t border-[#E6E6E6] px-4 py-4 text-sm leading-relaxed text-inapi-muted">
-            <p>{c.legalAcordado}</p>
-          </div>
-        </details>
+        <p className="mt-3 text-sm leading-relaxed text-inapi-muted">
+          {c.legalAcordado}
+        </p>
 
         <label className="mt-6 flex cursor-pointer items-start gap-3 text-sm text-[#111]">
           <Checkbox

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CircleHelp } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,10 @@ import { ResultsEmptyState } from "@/components/results/ResultsEmptyState";
 import { ResultsGuidance } from "@/components/results/ResultsGuidance";
 import { ResultsPagination } from "@/components/results/ResultsPagination";
 import { ClassPicker } from "@/components/search/ClassPicker";
+import { CoverageSearch } from "@/components/search/CoverageSearch";
 import { ApiError, buscarMarcas } from "@/lib/api";
 import { copy } from "@/lib/copy";
+import type { NclCobertura } from "@/lib/ncl-coberturas";
 import type { BusquedaResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { SIMILITUD_MIN_RESULTADOS } from "@/lib/similarity";
@@ -49,12 +51,24 @@ export function BuscadorApp() {
   const perPage = usePerPage();
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [consulta, setConsulta] = useState("");
+  const [nombreListo, setNombreListo] = useState(false);
   const [clases, setClases] = useState<number[]>([]);
+  const [coberturas, setCoberturas] = useState<NclCobertura[]>([]);
+  const [buscarTodas, setBuscarTodas] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<BusquedaResponse | null>(null);
   const [searched, setSearched] = useState(false);
   const [howOpen, setHowOpen] = useState(false);
+
+  const clasesEfectivas = useMemo(() => {
+    if (buscarTodas) return [];
+    const fromCoverage = coberturas.map((c) => c.clase);
+    return [...new Set([...clases, ...fromCoverage])].sort((a, b) => a - b);
+  }, [buscarTodas, clases, coberturas]);
+
+  const puedeVerMarcas =
+    nombreListo && (buscarTodas || clasesEfectivas.length > 0);
 
   const ejecutarBusqueda = useCallback(
     async (q: string, pageNum: number) => {
@@ -68,7 +82,9 @@ export function BuscadorApp() {
       try {
         const response = await buscarMarcas({
           q: trimmed,
-          clases: clases.length > 0 ? clases : undefined,
+          clases: buscarTodas || clasesEfectivas.length === 0
+            ? undefined
+            : clasesEfectivas,
           top: 200,
           modo_clases: "filtrar",
           similitud_min: SIMILITUD_MIN_RESULTADOS,
@@ -87,11 +103,20 @@ export function BuscadorApp() {
         setLoading(false);
       }
     },
-    [clases, perPage],
+    [buscarTodas, clasesEfectivas, perPage],
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleNameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!consulta.trim()) return;
+    setNombreListo(true);
+    setData(null);
+    setError(null);
+    setSearched(false);
+  };
+
+  const handleSeeMarks = () => {
+    if (!puedeVerMarcas) return;
     void ejecutarBusqueda(consulta, 1);
   };
 
@@ -101,7 +126,10 @@ export function BuscadorApp() {
 
   const handleClearSearch = () => {
     setConsulta("");
+    setNombreListo(false);
     setClases([]);
+    setCoberturas([]);
+    setBuscarTodas(false);
     setData(null);
     setError(null);
     setSearched(false);
@@ -123,61 +151,60 @@ export function BuscadorApp() {
       </header>
 
       <section className={searchPanelClass}>
-        <form onSubmit={handleSubmit} className="w-full">
-          <div className="grid w-full gap-4 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
-            <div className="min-w-0">
-              <div className={searchFieldLabelClass}>
-                <span className="flex items-center gap-1.5">
-                  <label htmlFor="searchInput" className="cursor-default">
-                    {copy.search.label}
-                  </label>
-                  <Popover open={howOpen} onOpenChange={setHowOpen}>
-                    <PopoverTrigger
-                      type="button"
-                      aria-label={copy.search.howItWorksAria}
-                      className="flex size-5 shrink-0 items-center justify-center rounded-full text-[#999] transition-colors hover:text-inapi-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inapi-blue/40"
-                    >
-                      <CircleHelp className="size-4" aria-hidden />
-                    </PopoverTrigger>
-                    <PopoverContent
-                      className="w-[min(20rem,calc(100vw-2rem))] gap-2 p-4"
-                      side="top"
-                      align="start"
-                    >
-                      <PopoverTitle className="text-sm font-bold text-[#111]">
-                        {copy.search.howItWorksTitle}
-                      </PopoverTitle>
-                      <PopoverDescription className="text-sm leading-relaxed text-inapi-muted">
-                        {copy.search.howItWorks}
-                      </PopoverDescription>
-                      <p className="text-sm leading-relaxed text-inapi-muted">
-                        {copy.search.howItWorksExample}
-                      </p>
-                    </PopoverContent>
-                  </Popover>
-                </span>
-              </div>
-              <Input
-                id="searchInput"
-                type="text"
-                value={consulta}
-                onChange={(e) => setConsulta(e.target.value)}
-                placeholder={copy.search.placeholder}
-                className={cn(searchControlClass, "text-left")}
-                autoComplete="off"
-              />
+        <form onSubmit={handleNameSubmit} className="w-full">
+          <div className="min-w-0">
+            <div className={searchFieldLabelClass}>
+              <span className="flex items-center gap-1.5">
+                <label htmlFor="searchInput" className="cursor-default">
+                  {copy.search.label}
+                </label>
+                <Popover open={howOpen} onOpenChange={setHowOpen}>
+                  <PopoverTrigger
+                    type="button"
+                    aria-label={copy.search.howItWorksAria}
+                    className="flex size-5 shrink-0 items-center justify-center rounded-full text-[#999] transition-colors hover:text-inapi-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inapi-blue/40"
+                  >
+                    <CircleHelp className="size-4" aria-hidden />
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[min(20rem,calc(100vw-2rem))] gap-2 p-4"
+                    side="top"
+                    align="start"
+                  >
+                    <PopoverTitle className="text-sm font-bold text-[#111]">
+                      {copy.search.howItWorksTitle}
+                    </PopoverTitle>
+                    <PopoverDescription className="text-sm leading-relaxed text-inapi-muted">
+                      {copy.search.howItWorks}
+                    </PopoverDescription>
+                    <p className="text-sm leading-relaxed text-inapi-muted">
+                      {copy.search.howItWorksExample}
+                    </p>
+                    <p className="text-sm leading-relaxed text-inapi-muted">
+                      {copy.search.howItWorksNumeros}
+                    </p>
+                  </PopoverContent>
+                </Popover>
+              </span>
             </div>
-
-            <ClassPicker selected={clases} onChange={setClases} />
+            <Input
+              id="searchInput"
+              type="text"
+              value={consulta}
+              onChange={(e) => setConsulta(e.target.value)}
+              placeholder={copy.search.placeholder}
+              className={cn(searchControlClass, "text-left")}
+              autoComplete="off"
+            />
           </div>
 
           <div className="mt-6 flex flex-wrap gap-3">
             <Button
               type="submit"
-              disabled={!consulta.trim() || loading}
+              disabled={!consulta.trim()}
               className={searchSubmitClass}
             >
-              {loading ? copy.search.loading : copy.search.submit}
+              {copy.search.submit}
             </Button>
             <Button
               type="button"
@@ -191,67 +218,98 @@ export function BuscadorApp() {
         </form>
       </section>
 
+      {nombreListo && (
+        <section className="border-t border-[#E6E6E6] pt-8">
+          <CoverageSearch
+            selected={coberturas}
+            onChange={(items) => {
+              setCoberturas(items);
+              if (items.length > 0) setBuscarTodas(false);
+            }}
+          />
+          <ClassPicker
+            selected={clases}
+            onChange={setClases}
+            buscarTodas={buscarTodas}
+            onBuscarTodasChange={setBuscarTodas}
+          />
+          <div className="mt-6">
+            <Button
+              type="button"
+              disabled={!puedeVerMarcas || loading}
+              onClick={handleSeeMarks}
+              className={searchSubmitClass}
+            >
+              {loading ? copy.search.loading : copy.coverage.seeMarks}
+            </Button>
+            {!puedeVerMarcas && (
+              <p className="mt-3 text-sm text-inapi-muted">
+                {copy.coverage.needClass}
+              </p>
+            )}
+          </div>
+        </section>
+      )}
+
       {searched && (
-        <>
-          <section aria-live="polite" aria-busy={loading}>
-            {loading && (
-              <div className="space-y-4">
-                <Skeleton className="h-4 w-64" />
-                <Skeleton className="h-40 w-full" />
-              </div>
-            )}
+        <section className="mt-8" aria-live="polite" aria-busy={loading}>
+          {loading && (
+            <div className="space-y-4">
+              <Skeleton className="h-4 w-64" />
+              <Skeleton className="h-40 w-full" />
+            </div>
+          )}
 
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{copy.results.error(error)}</AlertDescription>
-              </Alert>
-            )}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{copy.results.error(error)}</AlertDescription>
+            </Alert>
+          )}
 
-            {!loading && !error && data && (
-              <>
-                {data.resultados.length === 0 ? (
-                  <ResultsEmptyState
-                    message={
-                      clases.length > 0
-                        ? copy.results.emptyFiltered
-                        : copy.results.empty
-                    }
+          {!loading && !error && data && (
+            <>
+              {data.resultados.length === 0 ? (
+                <ResultsEmptyState
+                  message={
+                    clasesEfectivas.length > 0
+                      ? copy.results.emptyFiltered
+                      : copy.results.empty
+                  }
+                  consulta={data.consulta}
+                />
+              ) : (
+                <>
+                  <ResultsGuidance
+                    total={data.total}
                     consulta={data.consulta}
                   />
-                ) : (
-                  <>
-                    <ResultsGuidance
-                      total={data.total}
-                      consulta={data.consulta}
-                    />
-                    <p className="mb-4 text-sm text-inapi-muted">
-                      {copy.results.mostrando(
-                        data.resultados.length,
-                        data.total,
-                      )}
-                    </p>
-                    <ul className="list-none">
-                      {data.resultados.map((r, index) => (
-                        <li key={`${r.nombre}-${r.clases.join("-")}-${index}`}>
-                          <ResultCard
-                            resultado={r}
-                            clasesBuscadas={clases}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
+                  <p className="mb-4 text-sm text-inapi-muted">
+                    {copy.results.mostrando(
+                      data.resultados.length,
+                      data.total,
+                    )}
+                  </p>
+                  <ul className="list-none">
+                    {data.resultados.map((r, index) => (
+                      <li key={`${r.nombre}-${r.clases.join("-")}-${index}`}>
+                        <ResultCard
+                          resultado={r}
+                          clasesBuscadas={clasesEfectivas}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
 
-                <ResultsPagination
-                  page={data.page}
-                  totalPages={data.total_pages}
-                  onPageChange={handlePageChange}
-                />
-              </>
-            )}
-          </section>
-        </>
+              <ResultsPagination
+                page={data.page}
+                totalPages={data.total_pages}
+                onPageChange={handlePageChange}
+              />
+            </>
+          )}
+        </section>
       )}
 
       <p className="mt-8 text-xs text-inapi-muted">
