@@ -14,7 +14,7 @@ export const copy = {
     subtitleLanding:
       "Usa esta herramienta antes de pedir el registro de tu marca.",
     subtitleSearch:
-      "Escribe el nombre de tu marca. Después indica el producto o servicio para ver marcas parecidas.",
+      "Escribe el nombre de tu marca y el producto o servicio para ver marcas parecidas.",
   },
   landing: {
     queEsTitulo: "¿Qué hace este buscador?",
@@ -55,7 +55,7 @@ export const copy = {
     classesClearAll: "Quitar todas las clases elegidas",
     howItWorksTitle: "¿Cómo encuentra marcas este buscador?",
     howItWorks:
-      "El buscador encuentra marcas parecidas por cómo se escriben (denominación) y cómo suenan al pronunciarlas en español.",
+      "El buscador encuentra marcas parecidas por cómo se escriben (denominación) y cómo suenan al pronunciarlas.",
     howItWorksExample:
       "Ejemplo: Casa Blanca y Blanca Casa. O Cauquenes y Kaukenes.",
     howItWorksNumeros:
@@ -69,12 +69,15 @@ export const copy = {
   coverage: {
     label: "Producto o servicio de tu marca",
     placeholder: "Ejemplo: café tostado, reparación de calzado",
-    tooltipTitle: "¿Por qué debes elegir una clase?",
-    tooltipText:
-      "Para registrar una marca debes indicar al menos una clase de niza (tu producto o servicio). Escribe lo que vendes o el servicio que ofreces. Te mostramos las opciones más parecidas para que marques una clase con su cobertura.",
-    tooltipHint:
-      "Si ya conoces el número de clase, puedes elegirla más abajo, en «Si ya sabes qué producto o servicio registrar, selecciona la clase».",
+    tooltipTitle: "¿Por qué debes elegir una clase de niza (producto o servicio)?",
+    tooltipProductoServicio:
+      "El producto o servicio es lo que vendes u ofreces con tu marca. Por ejemplo: café tostado, ropa, reparación de calzado o asesoría contable.",
+    tooltipNcl:
+      "La Clasificación Internacional de Niza (NCL) agrupa productos y servicios en 45 clases.",
+    tooltipCobertura:
+      "La cobertura es la descripción concreta de ese producto o servicio dentro de una clase de Niza. Al elegir una clase, debes elegir la cobertura que más se relaciona con tu marca.",
     tooltipAria: "Información sobre clase y cobertura",
+    disabledHint: "Escribe primero el nombre de tu marca para habilitar este buscador.",
     submit: "Buscar producto o servicio",
     clearAria: "Limpiar búsqueda de producto o servicio",
     loadingCatalog: "Cargando catálogo…",
@@ -93,10 +96,10 @@ export const copy = {
     showLess: "Mostrar menos",
     seeMarks: "Ver marcas parecidas",
     needClass:
-      "Elige al menos una cobertura o una clase, o marca «Buscar en todas las clases», para ver marcas parecidas.",
+      "Escribe el nombre de tu marca y elige al menos una cobertura para continuar.",
   },
   results: {
-    summaryTitle: "Observaciones de similitud",
+    summaryTitle: "Revisa antes de continuar",
     coincidenciasIntro: (total: number, consulta: string) =>
       total === 1
         ? `Hay 1 marca parecida a «${consulta}». Te recomendamos revisarla.`
@@ -123,9 +126,15 @@ export const copy = {
     claseRelacionada: "Misma clase de productos o servicios",
     ortografica: "Parecido al escribir",
     fonetica: "Parecido al pronunciar",
-    coberturaTitulo: "Clases encontradas para esta marca",
+    coberturaTitulo:
+      "Clases encontradas para esta marca, las azules son idénticas a las tuyas",
     estadoChip: "Estado de la marca",
     verDetalle: "Ver detalle de la marca",
+    guiaDetalle: {
+      muy: "Tu marca presenta varias similitudes, revisa en detalle las características de esta marca antes de iniciar tu solicitud.",
+      algo: "Tu marca presenta algunas similitudes, revisa en detalle las características de esta marca antes de iniciar tu solicitud.",
+      poco: "Tu marca presenta pocas similitudes, revisa en detalle las características de esta marca antes de iniciar tu solicitud.",
+    },
     mostrando: (shown: number, total: number) =>
       `Mostrando ${shown} de ${total} marcas parecidas`,
   },

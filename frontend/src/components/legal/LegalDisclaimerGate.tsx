@@ -55,21 +55,21 @@ export function LegalDisclaimerGate({ onAccept }: LegalDisclaimerGateProps) {
       </section>
 
       <section
-        className="overflow-hidden rounded-sm border border-[#B3E5FC] border-l-4 border-l-inapi-blue bg-[#E3F2FD] p-5 sm:p-6"
+        className="mb-8 rounded-sm border border-[#E8ECEF] bg-white p-5 sm:p-6"
         aria-labelledby="aviso"
       >
         <h2 id="aviso" className="text-lg font-semibold text-[#111]">
           {c.legalTitle}
         </h2>
-        <p className="mt-3 text-sm leading-relaxed text-inapi-muted">
+        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-inapi-muted">
           {c.legalAcordado}
         </p>
 
-        <label className="mt-6 flex cursor-pointer items-start gap-3 text-sm text-[#111]">
+        <label className="mt-6 flex cursor-pointer items-start gap-3 text-sm font-medium text-[#111]">
           <Checkbox
             checked={checked}
             onCheckedChange={(value) => setChecked(value === true)}
-            className="mt-0.5"
+            className="mt-0.5 size-5 shrink-0 border-2 border-[#1565C0] bg-white data-checked:border-inapi-blue data-checked:bg-inapi-blue"
           />
           <span className="leading-relaxed">{c.acceptLabel}</span>
         </label>
