@@ -1,0 +1,37 @@
+# Espejo de .gitignore, pero para "docker build" (Docker no lee .gitignore).
+# Sin este archivo, COPY . . en el Dockerfile empaqueta TODO lo que hay en la
+# carpeta del proyecto dentro de la imagen, incluido lo que sigue.
+
+# Datos: solo el parquet procesado debe entrar a la imagen.
+# El Excel fuente (~53MB) y los Excel de validacion NO se necesitan en produccion.
+data/*
+!data/marcas_oponibles.parquet
+
+# Entornos y cachés de Python (se regeneran solos)
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Frontend: dependencias y build se regeneran dentro del contenedor
+# (el Dockerfile ya corre "bun install && bun run build")
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env*
+
+# Control de versiones y metadatos del editor/proyecto
+.git/
+.gitignore
+.gitattributes
+.claude/
+
+# Documentación y archivos pesados de referencia que no usa la app en runtime
+docs/
+exploracion/
+tests/
+queda.txt
+
+# Archivos temporales de Excel (candado de Office, ej. "~$archivo.xlsx")
+**/~$*

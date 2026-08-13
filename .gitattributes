@@ -1,3 +1,6 @@
 data/marcas_oponibles.parquet filter=lfs diff=lfs merge=lfs -text 
 uploads/*.jpg filter=lfs diff=lfs merge=lfs -text
+<<<<<<< HEAD
 frontend/public/uploads/*.jpg filter=lfs diff=lfs merge=lfs -text
+=======
+>>>>>>> origin/feat/frontend-nextjs-mvp-2026-07-29

@@ -6,7 +6,7 @@ interface ResultsEmptyStateProps {
   consulta: string;
 }
 
-/** Aviso UI Kit Gobierno — sin coincidencias ≥ 75 % */
+/** Aviso UI Kit Gobierno — sin coincidencias de parecido alto */
 export function ResultsEmptyState({ message, consulta }: ResultsEmptyStateProps) {
   return (
     <div

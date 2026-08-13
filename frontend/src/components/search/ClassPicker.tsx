@@ -21,13 +21,21 @@ import { cn } from "@/lib/utils";
 interface ClassPickerProps {
   selected: number[];
   onChange: (classes: number[]) => void;
+  buscarTodas: boolean;
+  onBuscarTodasChange: (value: boolean) => void;
 }
 
-export function ClassPicker({ selected, onChange }: ClassPickerProps) {
+export function ClassPicker({
+  selected,
+  onChange,
+  buscarTodas,
+  onBuscarTodasChange,
+}: ClassPickerProps) {
   const [open, setOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
   const toggle = (id: number) => {
+    onBuscarTodasChange(false);
     if (selected.includes(id)) {
       onChange(selected.filter((c) => c !== id));
     } else {
@@ -39,8 +47,14 @@ export function ClassPicker({ selected, onChange }: ClassPickerProps) {
     onChange(selected.filter((c) => c !== id));
   };
 
-  const label =
-    selected.length > 0
+  const clearAll = () => {
+    onChange([]);
+    onBuscarTodasChange(false);
+  };
+
+  const label = buscarTodas
+    ? copy.search.classesAllSearch
+    : selected.length > 0
       ? copy.search.classesCount(selected.length)
       : copy.search.classesAll;
 
@@ -70,6 +84,9 @@ export function ClassPicker({ selected, onChange }: ClassPickerProps) {
               <PopoverDescription className="text-sm leading-relaxed text-inapi-muted">
                 {copy.search.nclTooltipText}
               </PopoverDescription>
+              <p className="text-sm leading-relaxed text-inapi-muted">
+                {copy.search.classesHint}
+              </p>
             </PopoverContent>
           </Popover>
         </span>
@@ -89,9 +106,29 @@ export function ClassPicker({ selected, onChange }: ClassPickerProps) {
           </span>
         </PopoverTrigger>
         <PopoverContent
-          className="max-h-[300px] w-[var(--radix-popover-trigger-width)] overflow-y-auto p-0"
+          className="max-h-[360px] w-[var(--radix-popover-trigger-width)] overflow-y-auto p-0"
           align="start"
         >
+          <div className="space-y-2 border-b border-[#E6E6E6] bg-[#F8F9FA] px-3 py-3">
+            <label className="flex cursor-pointer items-center gap-3 text-sm">
+              <Checkbox
+                checked={buscarTodas}
+                onCheckedChange={(value) => {
+                  const next = value === true;
+                  onBuscarTodasChange(next);
+                  if (next) onChange([]);
+                }}
+              />
+              <span>{copy.search.classesSearchAll}</span>
+            </label>
+            <button
+              type="button"
+              onClick={clearAll}
+              className="text-sm font-medium text-inapi-blue hover:underline"
+            >
+              {copy.search.classesClearAll}
+            </button>
+          </div>
           <ul className="list-none">
             {NCL_CLASS_IDS.map((id) => (
               <li key={id}>
