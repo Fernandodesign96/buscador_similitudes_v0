@@ -4,5 +4,3 @@ pandas
 pyarrow
 rapidfuzz
 numpy
-pytest
-openpyxl
