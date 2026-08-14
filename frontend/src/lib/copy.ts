@@ -58,8 +58,11 @@ export const copy = {
       "El buscador encuentra marcas parecidas por cómo se escriben (denominación) y cómo suenan al pronunciarlas.",
     howItWorksExample:
       "Ejemplo: Casa Blanca y Blanca Casa. O Cauquenes y Kaukenes.",
-    howItWorksNumeros:
-      "Si tu marca contiene números, búscala de dos formas: con el número (ej. «Café 24») y con el número escrito en palabras (ej. «Café veinticuatro»). Ambas búsquedas pueden arrojar resultados distintos, y hacerlo así te da una visión más completa de marcas similares ya registradas.",
+    howItWorksNumerosTitulo: "Si tu marca contiene números:",
+    howItWorksNumerosFormas:
+      "Búscala de dos formas, con el número (ej. «Café 24») y con el número escrito en palabras (ej. «Café veinticuatro»).",
+    howItWorksNumerosResultado:
+      "Ambas búsquedas pueden arrojar resultados distintos, y hacerlo así te da una visión más completa de marcas similares ya registradas.",
     howItWorksAria: "¿Cómo encuentra marcas este buscador?",
     submit: "Continuar",
     loading: "Buscando marcas parecidas…",
@@ -69,13 +72,18 @@ export const copy = {
   coverage: {
     label: "Producto o servicio de tu marca",
     placeholder: "Ejemplo: café tostado, reparación de calzado",
-    tooltipTitle: "¿Por qué debes elegir una clase de niza (producto o servicio)?",
-    tooltipProductoServicio:
-      "El producto o servicio es lo que vendes u ofreces con tu marca. Por ejemplo: café tostado, ropa, reparación de calzado o asesoría contable.",
+    tooltipTitle: "¿Por qué debes elegir una Clase de Niza (producto o servicio)?",
+    tooltipIntro:
+      "En Chile, debes registrar tu marca en al menos una Clase de Niza: el producto o servicio que representará.",
     tooltipNcl:
-      "La Clasificación Internacional de Niza (NCL) agrupa productos y servicios en 45 clases.",
-    tooltipCobertura:
-      "La cobertura es la descripción concreta de ese producto o servicio dentro de una clase de Niza. Al elegir una clase, debes elegir la cobertura que más se relaciona con tu marca.",
+      "La Clasificación de Niza agrupa 45 clases en total. Ejemplos: Café, pan y pastelería (Clase 30), Vestuario y calzado (Clase 25), Aparatos científicos y electrónicos (Clase 9).",
+    tooltipComoEscribirTitulo: "Lo que debes hacer al escribir:",
+    tooltipTildes:
+      "Usa tildes y ortografía correcta. «café» (bebida) no es lo mismo que «cafe» (color).",
+    tooltipEspecifico:
+      "Sé concreto: «café tostado» o «software contable» da mejores resultados que una sola palabra general.",
+    searchHint:
+      "Escribe con tildes y sin faltas ortográficas para una búsqueda más eficiente.",
     tooltipAria: "Información sobre clase y cobertura",
     disabledHint: "Escribe primero el nombre de tu marca para habilitar este buscador.",
     submit: "Buscar producto o servicio",
@@ -95,8 +103,6 @@ export const copy = {
     showAll: (n: number) => `Mostrar las ${n}`,
     showLess: "Mostrar menos",
     seeMarks: "Ver marcas parecidas",
-    needClass:
-      "Escribe el nombre de tu marca y elige al menos una cobertura para continuar.",
   },
   results: {
     summaryTitle: "Revisa antes de continuar",
@@ -114,13 +120,11 @@ export const copy = {
       "Cómo suenan al pronunciarlos",
       "Qué productos o servicios cubren (Clase de Niza)",
     ] as const,
-    emptyTitle: "No encontramos marcas con un parecido alto",
-    empty:
-      "No hay marcas registradas con un parecido alto al nombre que escribiste.",
+    emptyTitle: "No encontramos marcas con un alto parecido a la tuya",
     emptyHint: (q: string) =>
-      `Marca buscada: «${q}». Puedes continuar con tu solicitud si lo deseas.`,
-    emptyFiltered:
-      "No hay marcas con un parecido alto en las clases que elegiste. Prueba otras clases o busca sin filtrar.",
+      `Marca buscada: «${q}». Puedes probar con otra Clase de Niza y cobertura (producto o servicio). Si tiene números, pruébala también escrita en palabras.`,
+    emptyDisclaimer:
+      "Ten en cuenta que este resultado no decide si INAPI aceptará o rechazará tu solicitud.",
     error: (msg: string) =>
       `No pudimos completar la búsqueda. ${msg} Intenta de nuevo en unos minutos.`,
     claseRelacionada: "Misma clase de productos o servicios",

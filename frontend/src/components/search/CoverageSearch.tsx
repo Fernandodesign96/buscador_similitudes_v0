@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
-  PopoverDescription,
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
@@ -335,18 +334,24 @@ export function CoverageSearch({
                 <CircleHelp className="size-4" aria-hidden />
               </PopoverTrigger>
               <PopoverContent
-                className="w-[min(22rem,calc(100vw-2rem))] gap-2 p-4"
+                className="w-[min(24rem,calc(100vw-2rem))] gap-2 p-4"
                 side="top"
                 align="start"
               >
                 <PopoverTitle className="text-sm font-bold text-[#111]">
                   {copy.coverage.tooltipTitle}
                 </PopoverTitle>
-                <PopoverDescription className="space-y-3 text-sm leading-relaxed text-inapi-muted">
-                  <p>{copy.coverage.tooltipProductoServicio}</p>
+                <div className="space-y-3 text-sm leading-relaxed text-inapi-muted">
+                  <p>{copy.coverage.tooltipIntro}</p>
                   <p>{copy.coverage.tooltipNcl}</p>
-                  <p>{copy.coverage.tooltipCobertura}</p>
-                </PopoverDescription>
+                  <p className="font-semibold text-[#111]">
+                    {copy.coverage.tooltipComoEscribirTitulo}
+                  </p>
+                  <ul className="list-disc space-y-2 pl-5">
+                    <li>{copy.coverage.tooltipTildes}</li>
+                    <li>{copy.coverage.tooltipEspecifico}</li>
+                  </ul>
+                </div>
               </PopoverContent>
             </Popover>
           </span>
@@ -408,6 +413,12 @@ export function CoverageSearch({
           </Button>
         </div>
       </form>
+
+      {!disabled && (
+        <p className="mt-2 text-sm leading-relaxed text-inapi-muted">
+          {copy.coverage.searchHint}
+        </p>
+      )}
 
       {disabled && (
         <p className="mt-2 text-sm text-inapi-muted">{copy.coverage.disabledHint}</p>

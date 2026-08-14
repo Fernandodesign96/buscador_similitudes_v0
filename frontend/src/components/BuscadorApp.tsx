@@ -196,8 +196,14 @@ export function BuscadorApp() {
                     <p className="text-sm leading-relaxed text-inapi-muted">
                       {copy.search.howItWorksExample}
                     </p>
+                    <p className="text-sm font-semibold text-[#111]">
+                      {copy.search.howItWorksNumerosTitulo}
+                    </p>
                     <p className="text-sm leading-relaxed text-inapi-muted">
-                      {copy.search.howItWorksNumeros}
+                      {copy.search.howItWorksNumerosFormas}
+                    </p>
+                    <p className="text-sm leading-relaxed text-inapi-muted">
+                      {copy.search.howItWorksNumerosResultado}
                     </p>
                   </PopoverContent>
                 </Popover>
@@ -255,12 +261,6 @@ export function BuscadorApp() {
             {copy.search.clear}
           </Button>
         </div>
-
-        {!puedeContinuar && (
-          <p className="mt-3 text-sm text-inapi-muted">
-            {copy.coverage.needClass}
-          </p>
-        )}
       </section>
 
       {searched && (
@@ -281,14 +281,7 @@ export function BuscadorApp() {
           {!loading && !error && data && (
             <>
               {data.resultados.length === 0 ? (
-                <ResultsEmptyState
-                  message={
-                    clasesEfectivas.length > 0
-                      ? copy.results.emptyFiltered
-                      : copy.results.empty
-                  }
-                  consulta={data.consulta}
-                />
+                <ResultsEmptyState consulta={data.consulta} />
               ) : (
                 <>
                   <ResultsGuidance
