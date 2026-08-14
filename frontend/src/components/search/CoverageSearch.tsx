@@ -34,6 +34,8 @@ interface CoverageSearchProps {
   compact?: boolean;
   /** Contenedor donde renderizar resultados (columna izquierda). */
   resultsSlot?: HTMLElement | null;
+  /** Incrementar para vaciar consulta y resultados de coberturas. */
+  resetKey?: number;
 }
 
 function groupByClass(items: NclCobertura[]) {
@@ -74,7 +76,7 @@ function ClassGroup({
       <summary className="cursor-pointer list-none bg-[#F0F7FD] px-4 py-3 [&::-webkit-details-marker]:hidden">
         <span className="flex items-center justify-between gap-3">
           <span className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="inline-flex rounded-sm bg-inapi-blue px-2.5 py-1 text-sm font-bold text-white">
+            <span className="inline-flex h-8 w-[5.5rem] shrink-0 items-center justify-center rounded-sm bg-inapi-blue text-sm font-bold text-white tabular-nums">
               {copy.coverage.classBar(clase)}
             </span>
             <span className="text-sm font-semibold text-[#111]">
@@ -134,6 +136,7 @@ export function CoverageSearch({
   disabled = false,
   compact = false,
   resultsSlot,
+  resetKey = 0,
 }: CoverageSearchProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -166,6 +169,15 @@ export function CoverageSearch({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (resetKey === 0) return;
+    setQuery("");
+    setResults(null);
+    setSearched(false);
+    setShowProducto(true);
+    setShowServicio(true);
+  }, [resetKey]);
 
   const selectedIds = new Set(selected.map((s) => s.id));
 
@@ -277,13 +289,20 @@ export function CoverageSearch({
 
   const resultsContent =
     resultsPanel || selectedPanel || emptyMessage ? (
-      <div
-        className={cn(
-          resultsSlot && "max-h-[min(32rem,calc(100vh-14rem))] overflow-y-auto",
+      <div>
+        {(emptyMessage || resultsPanel) && (
+          <div
+            className={cn(
+              resultsSlot &&
+                "max-h-[min(32rem,calc(100vh-14rem))] overflow-y-auto",
+            )}
+          >
+            {emptyMessage}
+            {resultsPanel && (
+              <div className={resultsSlot ? "" : "mt-4"}>{resultsPanel}</div>
+            )}
+          </div>
         )}
-      >
-        {emptyMessage}
-        {resultsPanel && <div className={resultsSlot ? "" : "mt-4"}>{resultsPanel}</div>}
         {selectedPanel}
       </div>
     ) : null;

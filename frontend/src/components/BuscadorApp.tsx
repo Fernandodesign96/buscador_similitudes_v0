@@ -58,10 +58,10 @@ export function BuscadorApp() {
   const [data, setData] = useState<BusquedaResponse | null>(null);
   const [searched, setSearched] = useState(false);
   const [howOpen, setHowOpen] = useState(false);
-  const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [detailResult, setDetailResult] = useState<Resultado | null>(null);
   const [coverageResultsSlot, setCoverageResultsSlot] =
     useState<HTMLDivElement | null>(null);
+  const [coverageResetKey, setCoverageResetKey] = useState(0);
 
   const onCoverageResultsSlot = useCallback((node: HTMLDivElement | null) => {
     setCoverageResultsSlot(node);
@@ -85,7 +85,6 @@ export function BuscadorApp() {
       setLoading(true);
       setError(null);
       setSearched(true);
-      setExpandedIds([]);
       setDetailResult(null);
 
       try {
@@ -99,9 +98,6 @@ export function BuscadorApp() {
           per_page: perPage,
         });
         setData(response);
-        if (response.resultados.length > 0) {
-          setExpandedIds([`${response.resultados[0].nombre}-0`]);
-        }
       } catch (err) {
         const message =
           err instanceof ApiError
@@ -131,8 +127,8 @@ export function BuscadorApp() {
     setData(null);
     setError(null);
     setSearched(false);
-    setExpandedIds([]);
     setDetailResult(null);
+    setCoverageResetKey((key) => key + 1);
   };
 
   const handleConsultaChange = (value: string) => {
@@ -142,15 +138,8 @@ export function BuscadorApp() {
       setData(null);
       setError(null);
       setSearched(false);
-      setExpandedIds([]);
       setDetailResult(null);
     }
-  };
-
-  const toggleExpanded = (id: string) => {
-    setExpandedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
   };
 
   if (!legalAccepted) {
@@ -237,6 +226,7 @@ export function BuscadorApp() {
               disabled={!marcaIngresada}
               compact
               resultsSlot={coverageResultsSlot}
+              resetKey={coverageResetKey}
             />
           </div>
         </div>
@@ -322,10 +312,6 @@ export function BuscadorApp() {
                         <li key={cardId}>
                           <ExpandableResultCard
                             marca={display}
-                            cardId={cardId}
-                            clasesBuscadas={clasesEfectivas}
-                            expanded={expandedIds.includes(cardId)}
-                            onToggle={() => toggleExpanded(cardId)}
                             onVerDetalle={() => setDetailResult(r)}
                           />
                         </li>

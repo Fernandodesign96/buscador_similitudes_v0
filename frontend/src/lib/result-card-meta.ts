@@ -1,3 +1,4 @@
+import { copy } from "@/lib/copy";
 import type { Resultado } from "@/lib/types";
 import { SIMILITUD_MIN_RESULTADOS } from "@/lib/similarity";
 
@@ -6,7 +7,7 @@ export type NivelParecido = "muy" | "algo" | "poco";
 export interface ResultCardDisplay extends Resultado {
   razonSocial: string;
   nivelParecido: NivelParecido;
-  resumenColapsado: string;
+  resumenItems: string[];
 }
 
 function nivelFromScores(r: Resultado): NivelParecido {
@@ -16,50 +17,35 @@ function nivelFromScores(r: Resultado): NivelParecido {
   return "poco";
 }
 
-function partesSimilitud(r: Resultado): string[] {
-  const partes: string[] = [];
-  if (r.desglose.ortografica >= 50) partes.push("al escribir");
-  if (r.desglose.fonetica >= 50) partes.push("al pronunciar");
-  return partes;
+type BandaSimilitud = "sobre95" | "sobre90" | "sobre85" | "sobre80" | "bajo80";
+
+function bandaFromPct(value: number): BandaSimilitud {
+  const n = Number.isFinite(value) ? value : 0;
+  if (n >= 95) return "sobre95";
+  if (n >= 90) return "sobre90";
+  if (n >= 85) return "sobre85";
+  if (n >= 80) return "sobre80";
+  return "bajo80";
 }
 
-function resumenClases(clasesBuscadas: number[], r: Resultado): string {
-  if (clasesBuscadas.length === 0 || !r.clase_relacionada) {
-    return "clase distinta";
-  }
-  const coinciden = r.clases.filter((c) => clasesBuscadas.includes(c));
-  if (coinciden.length === 0) return "clase distinta";
-  if (coinciden.length === 1) return `a la clase ${coinciden[0]}`;
-  if (coinciden.length === 2) {
-    return `a la clase ${coinciden[0]} y ${coinciden[1]}`;
-  }
-  return `a las clases ${coinciden.join(", ")}`;
+function clasesIdenticas(clasesBuscadas: number[], r: Resultado): number[] {
+  if (clasesBuscadas.length === 0) return [];
+  return r.clases.filter((c) => clasesBuscadas.includes(c));
 }
 
-export function buildResumenColapsado(
+export function buildResumenItems(
   r: Resultado,
   clasesBuscadas: number[],
-): string {
-  const nivel = nivelFromScores(r);
-  const partes = partesSimilitud(r);
-
-  if (nivel === "poco") return "Poco parecida";
-
-  if (nivel === "algo") {
-    if (partes.length === 0) return "Algo parecida · clase distinta";
-    return `Algo parecida: ${partes.join(" y ")}`;
+): string[] {
+  const items = [
+    copy.results.bandaEscribir[bandaFromPct(r.desglose.ortografica)],
+    copy.results.bandaPronunciar[bandaFromPct(r.desglose.fonetica)],
+  ];
+  const identicas = clasesIdenticas(clasesBuscadas, r);
+  if (identicas.length > 0) {
+    items.push(copy.results.bulletClaseIdentica(identicas));
   }
-
-  const claseTxt = resumenClases(clasesBuscadas, r);
-  if (partes.length === 0) {
-    return claseTxt === "clase distinta"
-      ? "Muy parecida · clase distinta"
-      : `Muy parecida: ${claseTxt}`;
-  }
-  const base = partes.join(", ");
-  return claseTxt === "clase distinta"
-    ? `Muy parecida: ${base}`
-    : `Muy parecida: ${base} y ${claseTxt}`;
+  return items;
 }
 
 export function toResultCardDisplay(
@@ -68,8 +54,8 @@ export function toResultCardDisplay(
 ): ResultCardDisplay {
   return {
     ...r,
-    razonSocial: r.titular?.trim() || "Nombre o razón social no disponible",
+    razonSocial: r.titular?.trim() || "Nombre o razón social",
     nivelParecido: nivelFromScores(r),
-    resumenColapsado: buildResumenColapsado(r, clasesBuscadas),
+    resumenItems: buildResumenItems(r, clasesBuscadas),
   };
 }

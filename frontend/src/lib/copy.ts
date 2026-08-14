@@ -1,7 +1,7 @@
 /**
  * Textos de la interfaz — Lenguaje Claro (INAPI).
  * Criterios: checklist A–H (calidad web / RLC).
- * Última revisión copy: 12-08-2026.
+ * Última revisión copy: 14-08-2026.
  */
 export const copy = {
   meta: {
@@ -64,7 +64,7 @@ export const copy = {
     submit: "Continuar",
     loading: "Buscando marcas parecidas…",
     clear: "Limpiar",
-    clearAria: "Limpiar nombre, clases y resultados",
+    clearAria: "Limpiar nombre, producto o servicio y resultados",
   },
   coverage: {
     label: "Producto o servicio de tu marca",
@@ -112,7 +112,7 @@ export const copy = {
     coincidenciasAspectos: [
       "Cómo se escriben",
       "Cómo suenan al pronunciarlos",
-      "Qué productos o servicios cubren",
+      "Qué productos o servicios cubren (Clase de Niza)",
     ] as const,
     emptyTitle: "No encontramos marcas con un parecido alto",
     empty:
@@ -126,6 +126,31 @@ export const copy = {
     claseRelacionada: "Misma clase de productos o servicios",
     ortografica: "Parecido al escribir",
     fonetica: "Parecido al pronunciar",
+    /** Tramos: ≥95, ≥90, ≥85, ≥80, <80. */
+    bandaEscribir: {
+      sobre95: "Demasiada similitud al escribir",
+      sobre90: "Mucha similitud al escribir",
+      sobre85: "Bastante similitud al escribir",
+      sobre80: "Alguna similitud al escribir",
+      bajo80: "Poca similitud al escribir",
+    },
+    bandaPronunciar: {
+      sobre95: "Demasiada similitud al pronunciar",
+      sobre90: "Mucha similitud al pronunciar",
+      sobre85: "Bastante similitud al pronunciar",
+      sobre80: "Alguna similitud al pronunciar",
+      bajo80: "Poca similitud al pronunciar",
+    },
+    bulletClaseIdentica: (clases: number[]) => {
+      if (clases.length === 1) {
+        return `Pertenece a la misma clase solicitada (${clases[0]})`;
+      }
+      if (clases.length === 2) {
+        return `Pertenece a las mismas clases solicitadas (${clases[0]} y ${clases[1]})`;
+      }
+      const resto = clases.slice(0, -1).join(", ");
+      return `Pertenece a las mismas clases solicitadas (${resto} y ${clases[clases.length - 1]})`;
+    },
     coberturaTitulo:
       "Clases encontradas para esta marca, las azules son idénticas a las tuyas",
     estadoChip: "Estado de la marca",
@@ -254,7 +279,7 @@ export const copy = {
         accesibilidad: "Declaración de accesibilidad",
         arco: "Política de privacidad y derechos ARCO",
       },
-      actualizacion: "Última actualización: 12-08-2026",
+      actualizacion: "Última actualización: 14-08-2026",
     },
   },
 } as const;
