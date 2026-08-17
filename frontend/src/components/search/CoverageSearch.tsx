@@ -33,8 +33,6 @@ interface CoverageSearchProps {
   compact?: boolean;
   /** Contenedor donde renderizar resultados (columna izquierda). */
   resultsSlot?: HTMLElement | null;
-  /** Incrementar para vaciar consulta y resultados de coberturas. */
-  resetKey?: number;
 }
 
 function groupByClass(items: NclCobertura[]) {
@@ -135,7 +133,6 @@ export function CoverageSearch({
   disabled = false,
   compact = false,
   resultsSlot,
-  resetKey = 0,
 }: CoverageSearchProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -168,15 +165,6 @@ export function CoverageSearch({
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (resetKey === 0) return;
-    setQuery("");
-    setResults(null);
-    setSearched(false);
-    setShowProducto(true);
-    setShowServicio(true);
-  }, [resetKey]);
 
   const selectedIds = new Set(selected.map((s) => s.id));
 
@@ -311,10 +299,7 @@ export function CoverageSearch({
     (resultsSlot ? createPortal(resultsContent, resultsSlot) : resultsContent);
 
   return (
-    <section
-      className={cn("text-left", compact ? "mb-0" : "mb-8")}
-      aria-disabled={disabled || undefined}
-    >
+    <section className={cn("text-left", compact ? "mb-0" : "mb-8")}>
       <form onSubmit={handleSearch}>
         <div className={searchFieldLabelClass}>
           <span className="flex items-center gap-1.5">

@@ -37,7 +37,7 @@ export function buildResumenItems(
   r: Resultado,
   clasesBuscadas: number[],
 ): string[] {
-  const items = [
+  const items: string[] = [
     copy.results.bandaEscribir[bandaFromPct(r.desglose.ortografica)],
     copy.results.bandaPronunciar[bandaFromPct(r.desglose.fonetica)],
   ];

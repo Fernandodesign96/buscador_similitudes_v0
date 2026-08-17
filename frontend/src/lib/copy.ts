@@ -145,7 +145,7 @@ export const copy = {
       sobre80: "Alguna similitud al pronunciar",
       bajo80: "Poca similitud al pronunciar",
     },
-    bulletClaseIdentica: (clases: number[]) => {
+    bulletClaseIdentica: (clases: number[]): string => {
       if (clases.length === 1) {
         return `Pertenece a la misma clase solicitada (${clases[0]})`;
       }

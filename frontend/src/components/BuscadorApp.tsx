@@ -227,12 +227,12 @@ export function BuscadorApp() {
             )}
           >
             <CoverageSearch
+              key={coverageResetKey}
               selected={coberturas}
               onChange={setCoberturas}
               disabled={!marcaIngresada}
               compact
               resultsSlot={coverageResultsSlot}
-              resetKey={coverageResetKey}
             />
           </div>
         </div>
