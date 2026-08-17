@@ -1,7 +1,7 @@
 /**
  * Textos de la interfaz — Lenguaje Claro (INAPI).
  * Criterios: checklist A–H (calidad web / RLC).
- * Última revisión copy: 12-08-2026.
+ * Última revisión copy: 14-08-2026.
  */
 export const copy = {
   meta: {
@@ -14,7 +14,7 @@ export const copy = {
     subtitleLanding:
       "Usa esta herramienta antes de pedir el registro de tu marca.",
     subtitleSearch:
-      "Escribe el nombre de tu marca. Después indica el producto o servicio para ver marcas parecidas.",
+      "Escribe el nombre de tu marca y el producto o servicio para ver marcas parecidas.",
   },
   landing: {
     queEsTitulo: "¿Qué hace este buscador?",
@@ -55,26 +55,37 @@ export const copy = {
     classesClearAll: "Quitar todas las clases elegidas",
     howItWorksTitle: "¿Cómo encuentra marcas este buscador?",
     howItWorks:
-      "El buscador encuentra marcas parecidas por cómo se escriben (denominación) y cómo suenan al pronunciarlas en español.",
+      "El buscador encuentra marcas parecidas por cómo se escriben (denominación) y cómo suenan al pronunciarlas.",
     howItWorksExample:
       "Ejemplo: Casa Blanca y Blanca Casa. O Cauquenes y Kaukenes.",
-    howItWorksNumeros:
-      "Si tu marca contiene números, búscala de dos formas: con el número (ej. «Café 24») y con el número escrito en palabras (ej. «Café veinticuatro»). Ambas búsquedas pueden arrojar resultados distintos, y hacerlo así te da una visión más completa de marcas similares ya registradas.",
+    howItWorksNumerosTitulo: "Si tu marca contiene números:",
+    howItWorksNumerosFormas:
+      "Búscala de dos formas, con el número (ej. «Café 24») y con el número escrito en palabras (ej. «Café veinticuatro»).",
+    howItWorksNumerosResultado:
+      "Ambas búsquedas pueden arrojar resultados distintos, y hacerlo así te da una visión más completa de marcas similares ya registradas.",
     howItWorksAria: "¿Cómo encuentra marcas este buscador?",
     submit: "Continuar",
     loading: "Buscando marcas parecidas…",
     clear: "Limpiar",
-    clearAria: "Limpiar nombre, clases y resultados",
+    clearAria: "Limpiar nombre, producto o servicio y resultados",
   },
   coverage: {
     label: "Producto o servicio de tu marca",
     placeholder: "Ejemplo: café tostado, reparación de calzado",
-    tooltipTitle: "¿Por qué debes elegir una clase?",
-    tooltipText:
-      "Para registrar una marca debes indicar al menos una clase de niza (tu producto o servicio). Escribe lo que vendes o el servicio que ofreces. Te mostramos las opciones más parecidas para que marques una clase con su cobertura.",
-    tooltipHint:
-      "Si ya conoces el número de clase, puedes elegirla más abajo, en «Si ya sabes qué producto o servicio registrar, selecciona la clase».",
+    tooltipTitle: "¿Por qué debes elegir una Clase de Niza (producto o servicio)?",
+    tooltipIntro:
+      "En Chile, debes registrar tu marca en al menos una Clase de Niza: el producto o servicio que representará.",
+    tooltipNcl:
+      "La Clasificación de Niza agrupa 45 clases en total. Ejemplos: Café, pan y pastelería (Clase 30), Vestuario y calzado (Clase 25), Aparatos científicos y electrónicos (Clase 9).",
+    tooltipComoEscribirTitulo: "Lo que debes hacer al escribir:",
+    tooltipTildes:
+      "Usa tildes y ortografía correcta. «café» (bebida) no es lo mismo que «cafe» (color).",
+    tooltipEspecifico:
+      "Sé concreto: «café tostado» o «software contable» da mejores resultados que una sola palabra general.",
+    searchHint:
+      "Escribe con tildes y sin faltas ortográficas para una búsqueda más eficiente.",
     tooltipAria: "Información sobre clase y cobertura",
+    disabledHint: "Escribe primero el nombre de tu marca para habilitar este buscador.",
     submit: "Buscar producto o servicio",
     clearAria: "Limpiar búsqueda de producto o servicio",
     loadingCatalog: "Cargando catálogo…",
@@ -92,11 +103,9 @@ export const copy = {
     showAll: (n: number) => `Mostrar las ${n}`,
     showLess: "Mostrar menos",
     seeMarks: "Ver marcas parecidas",
-    needClass:
-      "Elige al menos una cobertura o una clase, o marca «Buscar en todas las clases», para ver marcas parecidas.",
   },
   results: {
-    summaryTitle: "Observaciones de similitud",
+    summaryTitle: "Revisa antes de continuar",
     coincidenciasIntro: (total: number, consulta: string) =>
       total === 1
         ? `Hay 1 marca parecida a «${consulta}». Te recomendamos revisarla.`
@@ -109,23 +118,52 @@ export const copy = {
     coincidenciasAspectos: [
       "Cómo se escriben",
       "Cómo suenan al pronunciarlos",
-      "Qué productos o servicios cubren",
+      "Qué productos o servicios cubren (Clase de Niza)",
     ] as const,
-    emptyTitle: "No encontramos marcas con un parecido alto",
-    empty:
-      "No hay marcas registradas con un parecido alto al nombre que escribiste.",
+    emptyTitle: "No encontramos marcas con un alto parecido a la tuya",
     emptyHint: (q: string) =>
-      `Marca buscada: «${q}». Puedes continuar con tu solicitud si lo deseas.`,
-    emptyFiltered:
-      "No hay marcas con un parecido alto en las clases que elegiste. Prueba otras clases o busca sin filtrar.",
+      `Marca buscada: «${q}». Puedes probar con otra Clase de Niza y cobertura (producto o servicio). Si tiene números, pruébala también escrita en palabras.`,
+    emptyDisclaimer:
+      "Ten en cuenta que este resultado no decide si INAPI aceptará o rechazará tu solicitud.",
     error: (msg: string) =>
       `No pudimos completar la búsqueda. ${msg} Intenta de nuevo en unos minutos.`,
     claseRelacionada: "Misma clase de productos o servicios",
     ortografica: "Parecido al escribir",
     fonetica: "Parecido al pronunciar",
-    coberturaTitulo: "Clases encontradas para esta marca",
+    /** Tramos: ≥95, ≥90, ≥85, ≥80, <80. */
+    bandaEscribir: {
+      sobre95: "Demasiada similitud al escribir",
+      sobre90: "Mucha similitud al escribir",
+      sobre85: "Bastante similitud al escribir",
+      sobre80: "Alguna similitud al escribir",
+      bajo80: "Poca similitud al escribir",
+    },
+    bandaPronunciar: {
+      sobre95: "Demasiada similitud al pronunciar",
+      sobre90: "Mucha similitud al pronunciar",
+      sobre85: "Bastante similitud al pronunciar",
+      sobre80: "Alguna similitud al pronunciar",
+      bajo80: "Poca similitud al pronunciar",
+    },
+    bulletClaseIdentica: (clases: number[]) => {
+      if (clases.length === 1) {
+        return `Pertenece a la misma clase solicitada (${clases[0]})`;
+      }
+      if (clases.length === 2) {
+        return `Pertenece a las mismas clases solicitadas (${clases[0]} y ${clases[1]})`;
+      }
+      const resto = clases.slice(0, -1).join(", ");
+      return `Pertenece a las mismas clases solicitadas (${resto} y ${clases[clases.length - 1]})`;
+    },
+    coberturaTitulo:
+      "Clases encontradas para esta marca, las azules son idénticas a las tuyas",
     estadoChip: "Estado de la marca",
     verDetalle: "Ver detalle de la marca",
+    guiaDetalle: {
+      muy: "Tu marca presenta varias similitudes, revisa en detalle las características de esta marca antes de iniciar tu solicitud.",
+      algo: "Tu marca presenta algunas similitudes, revisa en detalle las características de esta marca antes de iniciar tu solicitud.",
+      poco: "Tu marca presenta pocas similitudes, revisa en detalle las características de esta marca antes de iniciar tu solicitud.",
+    },
     mostrando: (shown: number, total: number) =>
       `Mostrando ${shown} de ${total} marcas parecidas`,
   },
@@ -245,7 +283,7 @@ export const copy = {
         accesibilidad: "Declaración de accesibilidad",
         arco: "Política de privacidad y derechos ARCO",
       },
-      actualizacion: "Última actualización: 12-08-2026",
+      actualizacion: "Última actualización: 14-08-2026",
     },
   },
 } as const;

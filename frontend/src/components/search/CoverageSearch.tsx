@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CircleHelp, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
-  PopoverDescription,
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
@@ -29,6 +29,12 @@ const PREVIEW_LIMIT = 5;
 interface CoverageSearchProps {
   selected: NclCobertura[];
   onChange: (items: NclCobertura[]) => void;
+  disabled?: boolean;
+  compact?: boolean;
+  /** Contenedor donde renderizar resultados (columna izquierda). */
+  resultsSlot?: HTMLElement | null;
+  /** Incrementar para vaciar consulta y resultados de coberturas. */
+  resetKey?: number;
 }
 
 function groupByClass(items: NclCobertura[]) {
@@ -48,16 +54,14 @@ function ClassGroup({
   clase,
   items,
   selectedIds,
-  defaultOpen,
   onToggle,
 }: {
   clase: number;
   items: NclCobertura[];
   selectedIds: Set<number>;
-  defaultOpen: boolean;
   onToggle: (item: NclCobertura) => void;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? items : items.slice(0, PREVIEW_LIMIT);
   const hiddenCount = items.length - PREVIEW_LIMIT;
@@ -71,7 +75,7 @@ function ClassGroup({
       <summary className="cursor-pointer list-none bg-[#F0F7FD] px-4 py-3 [&::-webkit-details-marker]:hidden">
         <span className="flex items-center justify-between gap-3">
           <span className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="inline-flex rounded-sm bg-inapi-blue px-2.5 py-1 text-sm font-bold text-white">
+            <span className="inline-flex h-8 w-[5.5rem] shrink-0 items-center justify-center rounded-sm bg-inapi-blue text-sm font-bold text-white tabular-nums">
               {copy.coverage.classBar(clase)}
             </span>
             <span className="text-sm font-semibold text-[#111]">
@@ -125,7 +129,14 @@ function ClassGroup({
   );
 }
 
-export function CoverageSearch({ selected, onChange }: CoverageSearchProps) {
+export function CoverageSearch({
+  selected,
+  onChange,
+  disabled = false,
+  compact = false,
+  resultsSlot,
+  resetKey = 0,
+}: CoverageSearchProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
@@ -157,6 +168,15 @@ export function CoverageSearch({ selected, onChange }: CoverageSearchProps) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (resetKey === 0) return;
+    setQuery("");
+    setResults(null);
+    setSearched(false);
+    setShowProducto(true);
+    setShowServicio(true);
+  }, [resetKey]);
 
   const selectedIds = new Set(selected.map((s) => s.id));
 
@@ -192,36 +212,146 @@ export function CoverageSearch({ selected, onChange }: CoverageSearchProps) {
     }
   };
 
+  const inputDisabled =
+    disabled || loadingCatalog || Boolean(catalogError);
+
+  const resultsPanel =
+    results && results.length > 0 ? (
+      <div className="overflow-hidden rounded-sm border border-inapi-border bg-white">
+        <div className="flex flex-wrap items-center gap-4 border-b border-inapi-border px-4 py-3 text-sm">
+          <span className="text-inapi-muted">{copy.coverage.showClassesFor}</span>
+          <label className="flex cursor-pointer items-center gap-2">
+            <Checkbox
+              checked={showProducto}
+              onCheckedChange={(value) => setShowProducto(value === true)}
+            />
+            {copy.coverage.filterProducto}
+          </label>
+          <label className="flex cursor-pointer items-center gap-2">
+            <Checkbox
+              checked={showServicio}
+              onCheckedChange={(value) => setShowServicio(value === true)}
+            />
+            {copy.coverage.filterServicio}
+          </label>
+        </div>
+        {groups.length === 0 ? (
+          <p className="px-4 py-4 text-sm text-inapi-muted">
+            {copy.coverage.empty}
+          </p>
+        ) : (
+          groups.map((group) => (
+            <ClassGroup
+              key={group.clase}
+              clase={group.clase}
+              items={group.items}
+              selectedIds={selectedIds}
+              onToggle={toggle}
+            />
+          ))
+        )}
+      </div>
+    ) : null;
+
+  const selectedPanel =
+    selected.length > 0 ? (
+      <div className="mt-4">
+        <p className="mb-2 text-sm font-semibold text-[#111]">
+          {copy.coverage.selectedTitle(selected.length)}
+        </p>
+        <ul className="flex list-none flex-wrap gap-2">
+          {selected.map((item) => (
+            <li key={item.id}>
+              <span className="inline-flex max-w-full items-center gap-1.5 rounded-sm border border-inapi-border bg-inapi-surface-muted px-3 py-1.5 text-xs text-inapi-text">
+                <span className="truncate">
+                  Clase {item.clase} · {item.cobertura}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => toggle(item)}
+                  className="ml-1 font-bold leading-none"
+                  aria-label={`Quitar ${item.cobertura}`}
+                >
+                  ×
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ) : null;
+
+  const emptyMessage =
+    searched && !searching && results && results.length === 0 ? (
+      <p className="text-sm text-inapi-muted">{copy.coverage.empty}</p>
+    ) : null;
+
+  const resultsContent =
+    resultsPanel || selectedPanel || emptyMessage ? (
+      <div>
+        {(emptyMessage || resultsPanel) && (
+          <div
+            className={cn(
+              resultsSlot &&
+                "max-h-[min(32rem,calc(100vh-14rem))] overflow-y-auto",
+            )}
+          >
+            {emptyMessage}
+            {resultsPanel && (
+              <div className={resultsSlot ? "" : "mt-4"}>{resultsPanel}</div>
+            )}
+          </div>
+        )}
+        {selectedPanel}
+      </div>
+    ) : null;
+
+  const resultsNode =
+    resultsContent &&
+    (resultsSlot ? createPortal(resultsContent, resultsSlot) : resultsContent);
+
   return (
-    <section className="mb-8 text-left">
+    <section
+      className={cn("text-left", compact ? "mb-0" : "mb-8")}
+      aria-disabled={disabled || undefined}
+    >
       <form onSubmit={handleSearch}>
         <div className={searchFieldLabelClass}>
           <span className="flex items-center gap-1.5">
-            <label htmlFor="coverageInput" className="cursor-default">
+            <label
+              htmlFor="coverageInput"
+              className={cn("cursor-default", disabled && "text-inapi-muted")}
+            >
               {copy.coverage.label}
             </label>
             <Popover open={helpOpen} onOpenChange={setHelpOpen}>
               <PopoverTrigger
                 type="button"
+                disabled={disabled}
                 aria-label={copy.coverage.tooltipAria}
-                className="flex size-5 shrink-0 items-center justify-center rounded-full text-[#999] transition-colors hover:text-inapi-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inapi-blue/40"
+                className="flex size-5 shrink-0 items-center justify-center rounded-full text-[#999] transition-colors hover:text-inapi-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inapi-blue/40 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <CircleHelp className="size-4" aria-hidden />
               </PopoverTrigger>
               <PopoverContent
-                className="w-[min(22rem,calc(100vw-2rem))] gap-2 p-4"
+                className="w-[min(24rem,calc(100vw-2rem))] gap-2 p-4"
                 side="top"
                 align="start"
               >
                 <PopoverTitle className="text-sm font-bold text-[#111]">
                   {copy.coverage.tooltipTitle}
                 </PopoverTitle>
-                <PopoverDescription className="text-sm leading-relaxed text-inapi-muted">
-                  {copy.coverage.tooltipText}
-                </PopoverDescription>
-                <p className="text-sm leading-relaxed text-inapi-muted">
-                  {copy.coverage.tooltipHint}
-                </p>
+                <div className="space-y-3 text-sm leading-relaxed text-inapi-muted">
+                  <p>{copy.coverage.tooltipIntro}</p>
+                  <p>{copy.coverage.tooltipNcl}</p>
+                  <p className="font-semibold text-[#111]">
+                    {copy.coverage.tooltipComoEscribirTitulo}
+                  </p>
+                  <ul className="list-disc space-y-2 pl-5">
+                    <li>{copy.coverage.tooltipTildes}</li>
+                    <li>{copy.coverage.tooltipEspecifico}</li>
+                  </ul>
+                </div>
               </PopoverContent>
             </Popover>
           </span>
@@ -239,9 +369,10 @@ export function CoverageSearch({ selected, onChange }: CoverageSearchProps) {
                 searchControlClass,
                 "text-left",
                 query.length > 0 && "pr-10",
+                disabled && "cursor-not-allowed bg-[#F5F5F5] text-inapi-muted",
               )}
               autoComplete="off"
-              disabled={loadingCatalog || Boolean(catalogError)}
+              disabled={inputDisabled}
             />
             {query.length > 0 && (
               <button
@@ -262,12 +393,17 @@ export function CoverageSearch({ selected, onChange }: CoverageSearchProps) {
           <Button
             type="submit"
             disabled={
+              disabled ||
               query.trim().length < 2 ||
               loadingCatalog ||
               searching ||
               Boolean(catalogError)
             }
-            className={cn(searchSubmitClass, "sm:w-auto")}
+            className={cn(
+              searchSubmitClass,
+              "sm:w-auto",
+              disabled && "opacity-60",
+            )}
           >
             {loadingCatalog
               ? copy.coverage.loadingCatalog
@@ -278,78 +414,29 @@ export function CoverageSearch({ selected, onChange }: CoverageSearchProps) {
         </div>
       </form>
 
+      {!disabled && (
+        <p className="mt-2 text-sm leading-relaxed text-inapi-muted">
+          {copy.coverage.searchHint}
+        </p>
+      )}
+
+      {disabled && (
+        <p className="mt-2 text-sm text-inapi-muted">{copy.coverage.disabledHint}</p>
+      )}
+
       {catalogError && (
         <p className="mt-3 text-sm text-[#C62828]">{catalogError}</p>
       )}
 
-      {searched && !searching && results && results.length === 0 && (
-        <p className="mt-4 text-sm text-inapi-muted">{copy.coverage.empty}</p>
-      )}
+      {!resultsSlot &&
+        searched &&
+        !searching &&
+        results &&
+        results.length === 0 && (
+          <p className="mt-4 text-sm text-inapi-muted">{copy.coverage.empty}</p>
+        )}
 
-      {results && results.length > 0 && (
-        <div className="mt-4 overflow-hidden rounded-sm border border-inapi-border bg-white">
-          <div className="flex flex-wrap items-center gap-4 border-b border-inapi-border px-4 py-3 text-sm">
-            <span className="text-inapi-muted">{copy.coverage.showClassesFor}</span>
-            <label className="flex cursor-pointer items-center gap-2">
-              <Checkbox
-                checked={showProducto}
-                onCheckedChange={(value) => setShowProducto(value === true)}
-              />
-              {copy.coverage.filterProducto}
-            </label>
-            <label className="flex cursor-pointer items-center gap-2">
-              <Checkbox
-                checked={showServicio}
-                onCheckedChange={(value) => setShowServicio(value === true)}
-              />
-              {copy.coverage.filterServicio}
-            </label>
-          </div>
-          {groups.length === 0 ? (
-            <p className="px-4 py-4 text-sm text-inapi-muted">
-              {copy.coverage.empty}
-            </p>
-          ) : (
-            groups.map((group, index) => (
-              <ClassGroup
-                key={group.clase}
-                clase={group.clase}
-                items={group.items}
-                selectedIds={selectedIds}
-                defaultOpen={index === 0}
-                onToggle={toggle}
-              />
-            ))
-          )}
-        </div>
-      )}
-
-      {selected.length > 0 && (
-        <div className="mt-4">
-          <p className="mb-2 text-sm font-semibold text-[#111]">
-            {copy.coverage.selectedTitle(selected.length)}
-          </p>
-          <ul className="flex list-none flex-wrap gap-2">
-            {selected.map((item) => (
-              <li key={item.id}>
-                <span className="inline-flex max-w-full items-center gap-1.5 rounded-sm border border-inapi-border bg-inapi-surface-muted px-3 py-1.5 text-xs text-inapi-text">
-                  <span className="truncate">
-                    Clase {item.clase} · {item.cobertura}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => toggle(item)}
-                    className="ml-1 font-bold leading-none"
-                    aria-label={`Quitar ${item.cobertura}`}
-                  >
-                    ×
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {resultsNode}
     </section>
   );
 }

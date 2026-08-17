@@ -14,16 +14,17 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { LegalDisclaimerGate } from "@/components/legal/LegalDisclaimerGate";
-import { ResultCard } from "@/components/results/ResultCard";
+import { MarkDetail } from "@/components/results/MarkDetail";
+import { ExpandableResultCard } from "@/components/results/ExpandableResultCard";
 import { ResultsEmptyState } from "@/components/results/ResultsEmptyState";
 import { ResultsGuidance } from "@/components/results/ResultsGuidance";
 import { ResultsPagination } from "@/components/results/ResultsPagination";
-import { ClassPicker } from "@/components/search/ClassPicker";
 import { CoverageSearch } from "@/components/search/CoverageSearch";
 import { ApiError, buscarMarcas } from "@/lib/api";
 import { copy } from "@/lib/copy";
 import type { NclCobertura } from "@/lib/ncl-coberturas";
-import type { BusquedaResponse } from "@/lib/types";
+import { toResultCardDisplay } from "@/lib/result-card-meta";
+import type { BusquedaResponse, Resultado } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { SIMILITUD_MIN_RESULTADOS } from "@/lib/similarity";
 import {
@@ -51,24 +52,30 @@ export function BuscadorApp() {
   const perPage = usePerPage();
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [consulta, setConsulta] = useState("");
-  const [nombreListo, setNombreListo] = useState(false);
-  const [clases, setClases] = useState<number[]>([]);
   const [coberturas, setCoberturas] = useState<NclCobertura[]>([]);
-  const [buscarTodas, setBuscarTodas] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<BusquedaResponse | null>(null);
   const [searched, setSearched] = useState(false);
   const [howOpen, setHowOpen] = useState(false);
+  const [detailResult, setDetailResult] = useState<Resultado | null>(null);
+  const [coverageResultsSlot, setCoverageResultsSlot] =
+    useState<HTMLDivElement | null>(null);
+  const [coverageResetKey, setCoverageResetKey] = useState(0);
 
-  const clasesEfectivas = useMemo(() => {
-    if (buscarTodas) return [];
-    const fromCoverage = coberturas.map((c) => c.clase);
-    return [...new Set([...clases, ...fromCoverage])].sort((a, b) => a - b);
-  }, [buscarTodas, clases, coberturas]);
+  const onCoverageResultsSlot = useCallback((node: HTMLDivElement | null) => {
+    setCoverageResultsSlot(node);
+  }, []);
 
-  const puedeVerMarcas =
-    nombreListo && (buscarTodas || clasesEfectivas.length > 0);
+  const marcaIngresada = consulta.trim().length > 0;
+
+  const clasesEfectivas = useMemo(
+    () =>
+      [...new Set(coberturas.map((c) => c.clase))].sort((a, b) => a - b),
+    [coberturas],
+  );
+
+  const puedeContinuar = marcaIngresada && coberturas.length > 0;
 
   const ejecutarBusqueda = useCallback(
     async (q: string, pageNum: number) => {
@@ -78,13 +85,12 @@ export function BuscadorApp() {
       setLoading(true);
       setError(null);
       setSearched(true);
+      setDetailResult(null);
 
       try {
         const response = await buscarMarcas({
           q: trimmed,
-          clases: buscarTodas || clasesEfectivas.length === 0
-            ? undefined
-            : clasesEfectivas,
+          clases: clasesEfectivas,
           top: 200,
           modo_clases: "filtrar",
           similitud_min: SIMILITUD_MIN_RESULTADOS,
@@ -103,20 +109,11 @@ export function BuscadorApp() {
         setLoading(false);
       }
     },
-    [buscarTodas, clasesEfectivas, perPage],
+    [clasesEfectivas, perPage],
   );
 
-  const handleNameSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!consulta.trim()) return;
-    setNombreListo(true);
-    setData(null);
-    setError(null);
-    setSearched(false);
-  };
-
-  const handleSeeMarks = () => {
-    if (!puedeVerMarcas) return;
+  const handleContinuar = () => {
+    if (!puedeContinuar) return;
     void ejecutarBusqueda(consulta, 1);
   };
 
@@ -126,17 +123,36 @@ export function BuscadorApp() {
 
   const handleClearSearch = () => {
     setConsulta("");
-    setNombreListo(false);
-    setClases([]);
     setCoberturas([]);
-    setBuscarTodas(false);
     setData(null);
     setError(null);
     setSearched(false);
+    setDetailResult(null);
+    setCoverageResetKey((key) => key + 1);
+  };
+
+  const handleConsultaChange = (value: string) => {
+    setConsulta(value);
+    if (!value.trim()) {
+      setCoberturas([]);
+      setData(null);
+      setError(null);
+      setSearched(false);
+      setDetailResult(null);
+    }
   };
 
   if (!legalAccepted) {
     return <LegalDisclaimerGate onAccept={() => setLegalAccepted(true)} />;
+  }
+
+  if (detailResult) {
+    return (
+      <MarkDetail
+        resultado={detailResult}
+        onBack={() => setDetailResult(null)}
+      />
+    );
   }
 
   return (
@@ -151,7 +167,7 @@ export function BuscadorApp() {
       </header>
 
       <section className={searchPanelClass}>
-        <form onSubmit={handleNameSubmit} className="w-full">
+        <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
           <div className="min-w-0">
             <div className={searchFieldLabelClass}>
               <span className="flex items-center gap-1.5">
@@ -180,8 +196,14 @@ export function BuscadorApp() {
                     <p className="text-sm leading-relaxed text-inapi-muted">
                       {copy.search.howItWorksExample}
                     </p>
+                    <p className="text-sm font-semibold text-[#111]">
+                      {copy.search.howItWorksNumerosTitulo}
+                    </p>
                     <p className="text-sm leading-relaxed text-inapi-muted">
-                      {copy.search.howItWorksNumeros}
+                      {copy.search.howItWorksNumerosFormas}
+                    </p>
+                    <p className="text-sm leading-relaxed text-inapi-muted">
+                      {copy.search.howItWorksNumerosResultado}
                     </p>
                   </PopoverContent>
                 </Popover>
@@ -191,65 +213,55 @@ export function BuscadorApp() {
               id="searchInput"
               type="text"
               value={consulta}
-              onChange={(e) => setConsulta(e.target.value)}
+              onChange={(e) => handleConsultaChange(e.target.value)}
               placeholder={copy.search.placeholder}
               className={cn(searchControlClass, "text-left")}
               autoComplete="off"
             />
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Button
-              type="submit"
-              disabled={!consulta.trim()}
-              className={searchSubmitClass}
-            >
-              {copy.search.submit}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClearSearch}
-              className="h-11 min-h-11 rounded-sm border-[#E6E6E6] px-6 text-sm font-bold text-[#111]"
-            >
-              {copy.search.clear}
-            </Button>
-          </div>
-        </form>
-      </section>
-
-      {nombreListo && (
-        <section className="border-t border-[#E6E6E6] pt-8">
-          <CoverageSearch
-            selected={coberturas}
-            onChange={(items) => {
-              setCoberturas(items);
-              if (items.length > 0) setBuscarTodas(false);
-            }}
-          />
-          <ClassPicker
-            selected={clases}
-            onChange={setClases}
-            buscarTodas={buscarTodas}
-            onBuscarTodasChange={setBuscarTodas}
-          />
-          <div className="mt-6">
-            <Button
-              type="button"
-              disabled={!puedeVerMarcas || loading}
-              onClick={handleSeeMarks}
-              className={searchSubmitClass}
-            >
-              {loading ? copy.search.loading : copy.coverage.seeMarks}
-            </Button>
-            {!puedeVerMarcas && (
-              <p className="mt-3 text-sm text-inapi-muted">
-                {copy.coverage.needClass}
-              </p>
+          <div
+            className={cn(
+              "min-w-0 transition-opacity",
+              !marcaIngresada && "opacity-60",
             )}
+          >
+            <CoverageSearch
+              selected={coberturas}
+              onChange={setCoberturas}
+              disabled={!marcaIngresada}
+              compact
+              resultsSlot={coverageResultsSlot}
+              resetKey={coverageResetKey}
+            />
           </div>
-        </section>
-      )}
+        </div>
+
+        <div
+          ref={onCoverageResultsSlot}
+          className="mt-6 w-full"
+          aria-live="polite"
+        />
+
+        <div className="mt-8 flex flex-wrap gap-3">
+          <Button
+            type="button"
+            disabled={!puedeContinuar || loading}
+            onClick={handleContinuar}
+            className={searchSubmitClass}
+          >
+            {loading ? copy.search.loading : copy.search.submit}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleClearSearch}
+            className="h-11 min-h-11 rounded-sm border-[#E6E6E6] px-6 text-sm font-bold text-[#111]"
+          >
+            {copy.search.clear}
+          </Button>
+        </div>
+      </section>
 
       {searched && (
         <section className="mt-8" aria-live="polite" aria-busy={loading}>
@@ -269,14 +281,7 @@ export function BuscadorApp() {
           {!loading && !error && data && (
             <>
               {data.resultados.length === 0 ? (
-                <ResultsEmptyState
-                  message={
-                    clasesEfectivas.length > 0
-                      ? copy.results.emptyFiltered
-                      : copy.results.empty
-                  }
-                  consulta={data.consulta}
-                />
+                <ResultsEmptyState consulta={data.consulta} />
               ) : (
                 <>
                   <ResultsGuidance
@@ -289,15 +294,22 @@ export function BuscadorApp() {
                       data.total,
                     )}
                   </p>
-                  <ul className="list-none">
-                    {data.resultados.map((r, index) => (
-                      <li key={`${r.nombre}-${r.clases.join("-")}-${index}`}>
-                        <ResultCard
-                          resultado={r}
-                          clasesBuscadas={clasesEfectivas}
-                        />
-                      </li>
-                    ))}
+                  <ul className="list-none space-y-3">
+                    {data.resultados.map((r, index) => {
+                      const cardId = `${r.nombre}-${index}`;
+                      const display = toResultCardDisplay(
+                        r,
+                        clasesEfectivas,
+                      );
+                      return (
+                        <li key={cardId}>
+                          <ExpandableResultCard
+                            marca={display}
+                            onVerDetalle={() => setDetailResult(r)}
+                          />
+                        </li>
+                      );
+                    })}
                   </ul>
                 </>
               )}
