@@ -55,8 +55,8 @@ COLUMNAS_REQUERIDAS: tuple[str, ...] = (
 # examinador real. Se mantiene la proporcion relativa que tenian ortografico
 # y fonetico cuando existia la tercera senal (0.55 / 0.40 -> reescalado a
 # suma 1.0).
-PESO_ORTOGRAFICO: float = 0.58
-PESO_FONETICO: float = 0.42
+PESO_ORTOGRAFICO: float = 0.70
+PESO_FONETICO: float = 0.30
 
 # Resultados finales devueltos por consulta.
 TOP_RESULTADOS: int = 10
@@ -66,7 +66,7 @@ SIMILITUD_MIN_RESULTADOS: float = 75.0
 
 # Umbral de relacion de clase NCL: si las marcas no comparten clase, el score
 # combinado se atenua por este factor (clases no relacionadas = menor riesgo).
-FACTOR_CLASE_NO_RELACIONADA: float = 0.9
+FACTOR_CLASE_NO_RELACIONADA: float = 0.7
 
 # Longitud minima (en caracteres, sin contar espacios) que debe tener el
 # residuo de CADA marca, en busqueda.py, tras descontar las palabras/claves
