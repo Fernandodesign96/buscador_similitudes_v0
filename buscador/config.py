@@ -66,7 +66,7 @@ SIMILITUD_MIN_RESULTADOS: float = 75.0
 
 # Umbral de relacion de clase NCL: si las marcas no comparten clase, el score
 # combinado se atenua por este factor (clases no relacionadas = menor riesgo).
-FACTOR_CLASE_NO_RELACIONADA: float = 0.5
+FACTOR_CLASE_NO_RELACIONADA: float = 0.9
 
 # Longitud minima (en caracteres, sin contar espacios) que debe tener el
 # residuo de CADA marca, en busqueda.py, tras descontar las palabras/claves
