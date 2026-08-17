@@ -193,6 +193,39 @@ El motor ya no usa un índice FAISS ni recuperación previa de candidatos. En su
 
 Esto elimina la limitación anterior del MVP (marcas ortográficamente similares que quedaban fuera del recorte de candidatos semánticos) y a la vez es más rápido: el tiempo por consulta bajó de ~13 segundos (loop en Python) a ~0.11 segundos con `cdist`.
 
+### 4.5 Piso por contención total (fix 13-ago-2026, en deploy)
+
+**Problema detectado.** Analizando los rechazos M10 de 2025 reales (sin acceso a SQL Server: usando el nombre de la anterioridad extraído del propio texto de la observación, validado contra el universo completo — ver 5.4.1), se encontró que el **31% de los casos sin acierto en el top-10** tienen una diferencia de 2+ palabras entre la solicitud y la marca citada. Ejemplos reales:
+
+- "TU ASTRO CAFE" no encontraba a "ASTRO"
+- "VECTOR LOVE STORY" no encontraba a "VECTOR"
+- "HUAYU REMOTE COTROL" no encontraba a "HUAYU"
+- "ROYAL GUARD, UN MERECIDO RELAJO" no encontraba a "ROYAL"
+
+Estos casos tenían un score promedio ~11 puntos más bajo que el resto de los fallos. La causa: cuando una de las dos denominaciones queda vacía tras el descuento de comunes (`_palabras_comunes_fuera`), el motor ya reconoce que "una marca es casi subconjunto de la otra" y no aplica el castigo de genéricos — pero devuelve el score base sin modificar, que sigue siendo el ratio bruto de las dos cadenas completas, diluido por las palabras sobrantes del lado largo aunque esas palabras no sean genéricas. No había ningún mecanismo que **premiara** el hecho de que la marca corta está contenida, entera, como palabra o palabras completas de la marca larga — la misma doctrina del "elemento dominante" (Sabel v. Puma, C-251/95) que el descuento de genéricos ya invoca, pero aplicada aquí de forma incompleta.
+
+**La corrección: `_contencion_total()`.** Cuando TODAS las palabras (por lema) de uno de los dos lados están contenidas en las palabras del otro, y ninguna de esas palabras contenidas es genérica por frecuencia en la clase NCL del candidato (se reutiliza `indice.FrecuenciasPalabras.es_generica()`, sección 4.2.2), se aplica un piso: `config.PISO_CONTENCION_TOTAL = 82.0` como **máximo** con el score ya calculado (nunca lo baja). Se excluye deliberadamente el caso genérico (ej. "SKAAL BEER" vs "BEER": "BEER" no aporta distintividad, no debe recibir el piso) para no reintroducir el problema que el descuento de genéricos existe para resolver. También exige un largo mínimo (`config.LARGO_MINIMO_CONTENCION_TOTAL = 5`, sin espacios) para la marca contenida, mismo criterio que el piso de residuo corto de 4.2.3: por debajo de ese largo, una coincidencia automática es más riesgosa que útil.
+
+El valor de 82.0 se eligió tras validar contra los casos sin acierto de 2025: queda por encima de `SIMILITUD_MIN_RESULTADOS` (75) sin llegar al rango de una coincidencia exacta (~95-100), dejando lugar a que coincidencias más literales sigan rankeando más arriba.
+
+**Cierre de la brecha en el prefiltro (mismo fix, continuación).** La primera versión de este piso solo se aplicaba en el recálculo exacto (paso 2 de `MotorBusqueda.buscar()`): el prefiltro vectorizado (paso 1, `cdist`) no lo incluía, así que un candidato con score bruto muy bajo —precisamente el caso que este piso existe para arreglar— podía quedar fuera del top-`CANDIDATOS_PREFILTRO` y nunca llegar al paso 2 a recibirlo. Se cerró precalculando, una sola vez por marca del universo (en `IndiceBusqueda.__init__`), sus lemas y un **índice invertido lema → marcas** (`indice._lemas()` / `indice._indice_invertido_lemas()`). Con eso, `MotorBusqueda.buscar()` encuentra en el paso 1, en O(candidatos relevantes) y no en O(218k), qué candidatos podrían calificar para el piso (`busqueda._candidatos_contencion_total()`) y sube el score bruto de **cada señal por separado** (no el combinado directamente, para que la cota siga siendo válida sea cual sea el peso relativo configurado) antes de recortar al top-N. El filtro exacto (largo mínimo + genericidad) se reaplica sobre esa lista corta con la misma `_contencion_total()` del paso 2.
+
+**Validación empírica** (1.090 casos de rechazos M10 2025 con anterioridad citada reconstruida con ≥92% de confianza contra el universo completo, sin acceso a SQL Server):
+
+| Configuración | Recall@1 | Recall@3 | Recall@5 | Recall@10 |
+|---|---|---|---|---|
+| Sin piso (baseline) | — | — | — | 31.8% (347/1090) |
+| Piso solo en recálculo exacto (paso 2) | 16.6% (181) | 25.5% (278) | 30.1% (328) | 34.0% (371) |
+| Piso en prefiltro + recálculo exacto (versión desplegada) | 20.3% (221) | 28.9% (315) | 33.9% (369) | **38.3% (418)** |
+
+Cerrar la brecha del prefiltro no fue solo una corrección arquitectónica: sumó **47 casos adicionales** de recall@10 sobre la versión que ya tenía el piso, confirmando que el problema que motivó la advertencia ("un candidato puede quedar fuera del top-N y nunca recibir el piso") ocurría en la práctica, no solo en teoría.
+
+Se probó también si convenía volver a subir `PESO_ORTOGRAFICO`/`PESO_FONETICO` a 0.70/0.30 junto con este piso (se había subido temporalmente por pedido de negocio) — el resultado fue **idéntico** al de los pesos actuales (0.58/0.42) en los 1.090 casos (0 diferencias), así que se mantienen los pesos vigentes (0.58/0.42, ver 4.1) sin cambios.
+
+**Efecto secundario aceptado.** Este piso, al recompensar la contención literal de una marca completa dentro de otra, también hace subir el score de casos como "ROYAL GUARD, UN MERECIDO RELAJO" frente a una consulta "ROYAL" — un slogan/frase con la marca corta incluida. Se evaluó y se decidió mantener el piso igual: ese es exactamente el comportamiento buscado (si "ROYAL" está registrada, cualquier uso que la contenga entera, sin ser un término genérico del rubro, debe aparecer como anterioridad potencial), y penalizar más la señal ortográfica bajaría ese caso en vez de subirlo, no al revés.
+
+**Tests.** `test_similitud_fonetica_nunca_supera_el_score_bruto` y su equivalente ortográfico se actualizaron para reflejar esta excepción intencional al invariante del prefiltro (el score exacto ya no está acotado solo por el bruto pareado, sino por `max(bruto, piso)`), y se agregó `test_prefiltro_incluye_el_piso_por_contencion_total`, que ejercita `MotorBusqueda.buscar()` de punta a punta con un universo de ruido mayor a `CANDIDATOS_PREFILTRO` para confirmar que el candidato buscado sobrevive al recorte del paso 1.
+
 ---
 
 ## 5. El universo de marcas oponibles
@@ -232,7 +265,13 @@ Tras filtrar y agrupar por marca (una marca puede tener múltiples filas por cla
 
 ### 5.4 Nota sobre el número de registro oficial
 
-Durante el desarrollo se descubrió que el "número de registro oficial" que citan los examinadores en las observaciones de Art. 20 h) **no corresponde a ningún campo del Excel** (ni `Mark Code` ni `Nro_sol` ni `solicitud_base`). Es un cuarto identificador que existe en SQL Server pero no se exportó en este archivo. Esto impide la validación automática del recall contra los rechazos reales de 2025, y es uno de los argumentos concretos para solicitar acceso a SQL Server.
+Durante el desarrollo se descubrió que el "número de registro oficial" que citan los examinadores en las observaciones de Art. 20 h) **no corresponde a ningún campo del Excel** (ni `Mark Code` ni `Nro_sol` ni `solicitud_base`). Es un cuarto identificador que existe en SQL Server pero no se exportó en este archivo, y el proyecto no tendrá acceso a SQL Server (decisión de negocio). Esto impide reconstruir la anterioridad citada por **número**; ver 5.4.1 para la solución adoptada.
+
+#### 5.4.1 Validación de recall sin acceso a SQL Server (fix 13-ago-2026)
+
+Sin poder resolver el número de registro citado, la reconstrucción del ground truth se hace extrayendo el **nombre** de la marca citada directamente del texto de la observación (aparece justo después de "Registro &lt;número&gt;.", con reglas que se detienen en conectores como "Protege"/"distingue" y en puntuación). El texto de las observaciones tiene corrupción sistemática conocida (pérdida de la letra "p" minúscula, entidades HTML sin resolver), así que no toda extracción es confiable.
+
+Para no depender de una revisión manual (no hay tiempo para revisar caso a caso), cada nombre extraído se valida automáticamente contra el **universo completo** de 218.369 marcas con `rapidfuzz.process.cdist`, y solo se usan como ground truth los que alcanzan **≥92% de confianza** contra alguna marca real del universo (71.4% de las extracciones pasan este umbral). Sobre esa base de alta confianza (1.090 casos únicos de rechazos M10 2025) se mide el recall real del motor, sin revisión manual y sin depender de SQL Server.
 
 ---
 
@@ -378,7 +417,7 @@ El proyecto tiene tests que cubren:
 |---|---|
 | `test_datos.py` | Lectura del Excel, derivación de solicitud_base, filtrado de estados, agrupación por marca |
 | `test_normalizacion.py` | Limpieza de texto (limpiar), reglas fonéticas (clave_fonetica, incl. "vocal+y" final como diptongo), lema (singularización) y ordenar_tokens, casos borde con tildes/ñ/puntuación |
-| `test_busqueda.py` | Combinación de señales (incl. blend con Jaro-Winkler), corrección de palabras genéricas (por lema compartido y por frecuencia de clase), residuo demasiado corto, modulación por clase, ordenamiento, similitud por n-gramas (probada pero no usada en el score — ver 4.2.5), invariante de seguridad del prefiltro (descuento nunca supera el score bruto), regresión "SEMINRIOS" (typo en palabra distintiva no se castiga por genéricos alrededor) y cobertura de la rama de prefiltro con universo grande |
+| `test_busqueda.py` | Combinación de señales (incl. blend con Jaro-Winkler), corrección de palabras genéricas (por lema compartido y por frecuencia de clase), residuo demasiado corto, modulación por clase, ordenamiento, similitud por n-gramas (probada pero no usada en el score — ver 4.2.5), piso por contención total y su cierre en el prefiltro (ver 4.5), invariante relajado del prefiltro (descuento/piso nunca superan `max(score bruto, piso esperado)`), regresión "SEMINRIOS" (typo en palabra distintiva no se castiga por genéricos alrededor) y cobertura de la rama de prefiltro con universo grande |
 | `test_indice.py` | Construcción de `FrecuenciasPalabras` por clase NCL (no globalmente), uso de lema en vez de cadena exacta al contar, umbral y piso de conteo mínimo |
 | `test_validacion.py` | Preparación de casos de validación y conteo de recall |
 
@@ -387,7 +426,7 @@ Para correr:
 pytest
 ```
 
-Output esperado: `79 passed`.
+Output esperado: `81 passed`.
 
 ---
 

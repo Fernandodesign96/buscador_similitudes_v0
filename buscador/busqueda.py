@@ -209,6 +209,105 @@ def _palabras_comunes_fuera(
     return fa, fb
 
 
+def _contencion_total(
+    palabras_a: list[str],
+    palabras_b: list[str],
+    lemas_a: list[str],
+    lemas_b: list[str],
+    *,
+    frecuencias: FrecuenciasPalabras | None,
+    clases: list[int] | None,
+) -> float | None:
+    """Piso por contencion total (prototipo 13-ago-2026, en validacion --
+    ver config.PISO_CONTENCION_TOTAL). Devuelve el piso a aplicar (o None si
+    no corresponde) cuando TODAS las palabras (por lema) de uno de los dos
+    lados estan contenidas en las palabras del otro lado, y ninguna de esas
+    palabras contenidas es generica por frecuencia en la clase del
+    candidato. No distingue ortografico/fonetico: se le pasan directamente
+    las palabras (o claves foneticas por palabra) y lemas ya calculados por
+    el llamador, para no recalcular normalizacion.lema() dos veces.
+    """
+    set_lemas_a, set_lemas_b = set(lemas_a), set(lemas_b)
+    if not set_lemas_a or not set_lemas_b:
+        return None
+
+    if set_lemas_a.issubset(set_lemas_b):
+        contenida_palabras, contenida_lemas = palabras_a, lemas_a
+    elif set_lemas_b.issubset(set_lemas_a):
+        contenida_palabras, contenida_lemas = palabras_b, lemas_b
+    else:
+        return None
+
+    largo_contenida = len("".join(contenida_palabras))
+    if largo_contenida < config.LARGO_MINIMO_CONTENCION_TOTAL:
+        return None
+
+    if frecuencias is not None:
+        for palabra, lema in zip(contenida_palabras, contenida_lemas):
+            if frecuencias.es_generica(palabra, clases):
+                return None  # el lado contenido es (parcialmente) generico
+
+    return config.PISO_CONTENCION_TOTAL
+
+
+def _candidatos_contencion_total(
+    lemas_consulta: tuple[str, ...],
+    indice_invertido: dict[str, list[int]],
+    lemas_por_marca: list[tuple[str, ...]],
+) -> set[int]:
+    """Indices de candidatos que POdrian calificar para el piso de
+    contencion total con esta consulta (fix 13-ago-2026, cierre de brecha
+    en el prefiltro -- ver config.PISO_CONTENCION_TOTAL). Es un
+    SUPERCONJUNTO seguro: no reaplica el filtro exacto de largo minimo ni
+    de genericidad (eso lo hace el llamador con _contencion_total() sobre
+    cada indice devuelto), solo encuentra eficientemente, via el indice
+    invertido lema -> marcas (ver indice._indice_invertido_lemas), a quien
+    le conviene revisar.
+
+    Dos direcciones de contencion (ver _contencion_total()):
+
+      1. La consulta esta contenida en el candidato (todas las lemas de la
+         consulta son un subconjunto de las lemas del candidato, ej.
+         consulta "ROYAL" contenida en candidato "ROYAL GUARD FASHION"):
+         interseccion de las listas invertidas de cada lema de la consulta
+         -- cualquier marca en esa interseccion contiene, por definicion,
+         cada lema de la consulta.
+
+      2. El candidato esta contenido en la consulta (todas las lemas del
+         candidato son un subconjunto de las lemas de la consulta, ej.
+         consulta "TU ASTRO CAFE" contiene al candidato "ASTRO"): la union
+         de esas mismas listas invertidas es un superconjunto de estos
+         candidatos (cualquiera que califique comparte al menos una lema
+         con la consulta), pero hay que filtrar la union exactamente por
+         subconjunto porque tambien incluye marcas con alguna lema en comun
+         que NO estan enteramente contenidas en la consulta.
+
+    Ambas listas estan acotadas por que tan comunes son las lemas de la
+    consulta (una consulta corta, pocas lemas), no por el tamaño del
+    universo: iterarlas en Python por consulta no compromete el
+    presupuesto de tiempo (~0.11s) del prefiltro vectorizado.
+    """
+    set_lemas_consulta = set(lemas_consulta)
+    if not set_lemas_consulta:
+        return set()
+
+    listas_postings = [indice_invertido.get(l) for l in set_lemas_consulta]
+    if all(listas_postings):
+        candidatos_dir1 = set.intersection(*(set(p) for p in listas_postings))
+    else:
+        candidatos_dir1 = set()  # alguna lema de la consulta no aparece en ninguna marca
+
+    union: set[int] = set()
+    for l in set_lemas_consulta:
+        union.update(indice_invertido.get(l, ()))
+    candidatos_dir2 = {
+        i for i in union
+        if set(lemas_por_marca[i]).issubset(set_lemas_consulta)
+    }
+
+    return candidatos_dir1 | candidatos_dir2
+
+
 def _score_ortografico_base(a: str, b: str) -> float:
     """Similitud ortografica 0-100 SIN descuento de genericos: combina
     token_sort_ratio con Jaro-Winkler (fix 06-ago-2026 PM) sobre los tokens
@@ -401,14 +500,20 @@ def _similitud_ortografica(
     if " " not in a and " " not in b:
         return score_base  # una sola palabra cada una: nada que descontar
 
+    wa, wb = a.split(), b.split()
+    lemas_a = [normalizacion.lema(w) for w in wa]
+    lemas_b = [normalizacion.lema(w) for w in wb]
+    piso = _contencion_total(wa, wb, lemas_a, lemas_b, frecuencias=frecuencias, clases=clases)
+
     fa, fb = _palabras_comunes_fuera(a, b, frecuencias=frecuencias, clases=clases)
     if not fa or not fb:
-        return score_base  # una marca es casi subconjunto de la otra
-    if _residuos_variante_corta(fa, fb):
-        return score_base  # residuo corto y ademas variante de tipeo del otro
+        resultado = score_base  # una marca es casi subconjunto de la otra
+    elif _residuos_variante_corta(fa, fb):
+        resultado = score_base  # residuo corto y ademas variante de tipeo del otro
+    else:
+        resultado = min(score_base, _score_ortografico_base(fa, fb))
 
-    score_residuo = _score_ortografico_base(fa, fb)
-    return min(score_base, score_residuo)
+    return max(resultado, piso) if piso is not None else resultado
 
 
 def _similitud_fonetica(
@@ -471,18 +576,30 @@ def _similitud_fonetica(
 
     claves_a = [normalizacion.clave_fonetica(w) for w in wa]
     claves_b = [normalizacion.clave_fonetica(w) for w in wb]
+    # Para la contencion, las "palabras" y "lemas" son las claves foneticas
+    # por palabra (no hay lema fonetico propiamente dicho: se reusa
+    # normalizacion.lema() sobre la clave, igual convencion que
+    # _palabras_comunes_fuera ya usa mas abajo para esta senal).
+    lemas_fon_a = [normalizacion.lema(c) for c in claves_a]
+    lemas_fon_b = [normalizacion.lema(c) for c in claves_b]
+    piso = _contencion_total(
+        claves_a, claves_b, lemas_fon_a, lemas_fon_b,
+        frecuencias=frecuencias, clases=clases,
+    )
+
     fa, fb = _palabras_comunes_fuera(
         " ".join(claves_a), " ".join(claves_b),
         frecuencias=frecuencias, clases=clases,
     )
 
     if not fa or not fb:
-        return score_base  # una marca es subconjunto fonetico de la otra
-    if _residuos_variante_corta(fa, fb):
-        return score_base  # residuo corto y ademas variante de tipeo del otro
+        resultado = score_base  # una marca es subconjunto fonetico de la otra
+    elif _residuos_variante_corta(fa, fb):
+        resultado = score_base  # residuo corto y ademas variante de tipeo del otro
+    else:
+        resultado = min(score_base, _score_fonetico_base(fa, fb))
 
-    score_residuo = _score_fonetico_base(fa, fb)
-    return min(score_base, score_residuo)
+    return max(resultado, piso) if piso is not None else resultado
 
 
 class MotorBusqueda:
@@ -588,6 +705,70 @@ class MotorBusqueda:
             config.PESO_RATIO_FONETICO * s_fon_ratio
             + config.PESO_JARO_WINKLER_FONETICO * s_fon_jw
         )
+
+        # --- Piso por contencion total, tambien en el prefiltro (fix
+        # 13-ago-2026, cierre de la brecha documentada en
+        # config.PISO_CONTENCION_TOTAL): antes de combinar y recortar al
+        # top-N, se sube el score BRUTO DE CADA SENAL (no el combinado
+        # directamente, para que la cota siga siendo valida sea cual sea
+        # PESO_ORTOGRAFICO/PESO_FONETICO configurado) al piso, en los
+        # indices que _candidatos_contencion_total() encuentra via el
+        # indice invertido de lemas y que pasan el mismo filtro exacto
+        # (largo minimo + genericidad) que aplica _contencion_total() en
+        # el recalculo del paso 2. Sin esto, un candidato con score bruto
+        # muy bajo (ej. "ROYAL" vs "ROYAL GUARD, UN MERECIDO RELAJO") podia
+        # quedar fuera del top-CANDIDATOS_PREFILTRO y nunca llegar al paso
+        # 2 a recibir el piso.
+        #
+        # getattr()/None: mismo patron que canonicos_ordenados/
+        # frecuencias_* mas abajo -- dobles de prueba simples (IndiceFalso
+        # en test_busqueda.py) no tienen estos atributos, y sin ellos el
+        # comportamiento es el mismo de antes de este fix (el piso solo se
+        # aplica en el recalculo exacto del paso 2, no en el prefiltro).
+        indice_lemas_ort = getattr(idx, "indice_lemas_canonico", None)
+        lemas_canonico_universo = getattr(idx, "lemas_canonico", None)
+        if indice_lemas_ort is not None and lemas_canonico_universo is not None:
+            palabras_consulta_ort = canonico.split()
+            lemas_consulta_ort = tuple(
+                normalizacion.lema(w) for w in palabras_consulta_ort
+            )
+            for i in _candidatos_contencion_total(
+                lemas_consulta_ort, indice_lemas_ort, lemas_canonico_universo,
+            ):
+                clases_cand = [int(c) for c in idx.clases[i]]
+                piso = _contencion_total(
+                    palabras_consulta_ort, idx.canonicos[i].split(),
+                    list(lemas_consulta_ort), list(lemas_canonico_universo[i]),
+                    frecuencias=frecuencias_ort, clases=clases_cand,
+                )
+                if piso is not None and piso > s_ort_bruto[i]:
+                    s_ort_bruto[i] = piso
+
+        indice_lemas_fon = getattr(idx, "indice_lemas_fonetico", None)
+        lemas_fonetico_universo = getattr(idx, "lemas_fonetico", None)
+        foneticos_palabras_universo = getattr(idx, "foneticos_palabras", None)
+        if (
+            indice_lemas_fon is not None
+            and lemas_fonetico_universo is not None
+            and foneticos_palabras_universo is not None
+        ):
+            claves_consulta_fon = [
+                normalizacion.clave_fonetica(w) for w in consulta.split()
+            ]
+            lemas_consulta_fon = tuple(
+                normalizacion.lema(c) for c in claves_consulta_fon
+            )
+            for i in _candidatos_contencion_total(
+                lemas_consulta_fon, indice_lemas_fon, lemas_fonetico_universo,
+            ):
+                clases_cand = [int(c) for c in idx.clases[i]]
+                piso = _contencion_total(
+                    claves_consulta_fon, foneticos_palabras_universo[i].split(),
+                    list(lemas_consulta_fon), list(lemas_fonetico_universo[i]),
+                    frecuencias=frecuencias_fon, clases=clases_cand,
+                )
+                if piso is not None and piso > s_fon_bruto[i]:
+                    s_fon_bruto[i] = piso
 
         combinado_bruto = (
             config.PESO_ORTOGRAFICO * s_ort_bruto
