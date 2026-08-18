@@ -65,12 +65,6 @@ export function InapiHeader() {
               aria-label={copy.chrome.header.buscarSitioAria}
             />
           </div>
-          <Link
-            href="#"
-            className="bg-inapi-blue px-4 py-2.5 text-[13px] font-bold hover:bg-inapi-blue-dark"
-          >
-            {copy.chrome.header.acceso}
-          </Link>
         </div>
       </nav>
     </header>

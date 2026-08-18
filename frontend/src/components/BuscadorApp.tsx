@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CircleHelp } from "lucide-react";
+import { CircleHelp, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import { ExpandableResultCard } from "@/components/results/ExpandableResultCard"
 import { ResultsEmptyState } from "@/components/results/ResultsEmptyState";
 import { ResultsGuidance } from "@/components/results/ResultsGuidance";
 import { ResultsPagination } from "@/components/results/ResultsPagination";
+import { ScrollToTopButton } from "@/components/results/ScrollToTopButton";
 import { CoverageSearch } from "@/components/search/CoverageSearch";
 import { ApiError, buscarMarcas } from "@/lib/api";
 import { copy } from "@/lib/copy";
@@ -29,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { SIMILITUD_MIN_RESULTADOS } from "@/lib/similarity";
 import {
   searchControlClass,
+  searchControlLockedClass,
   searchFieldLabelClass,
   searchPanelClass,
   searchSubmitClass,
@@ -62,6 +64,15 @@ export function BuscadorApp() {
   const [coverageResultsSlot, setCoverageResultsSlot] =
     useState<HTMLDivElement | null>(null);
   const [coverageResetKey, setCoverageResetKey] = useState(0);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [coverageSearching, setCoverageSearching] = useState(false);
+
+  const camposBloqueados =
+    catalogLoading || loading || coverageSearching;
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [detailResult]);
 
   const onCoverageResultsSlot = useCallback((node: HTMLDivElement | null) => {
     setCoverageResultsSlot(node);
@@ -150,6 +161,7 @@ export function BuscadorApp() {
     return (
       <MarkDetail
         resultado={detailResult}
+        clasesBuscadas={clasesEfectivas}
         onBack={() => setDetailResult(null)}
       />
     );
@@ -215,8 +227,15 @@ export function BuscadorApp() {
               value={consulta}
               onChange={(e) => handleConsultaChange(e.target.value)}
               placeholder={copy.search.placeholder}
-              className={cn(searchControlClass, "text-left")}
+              className={cn(
+                searchControlClass,
+                "text-left",
+                camposBloqueados && searchControlLockedClass,
+              )}
               autoComplete="off"
+              disabled={camposBloqueados}
+              readOnly={camposBloqueados}
+              aria-disabled={camposBloqueados}
             />
           </div>
 
@@ -230,9 +249,11 @@ export function BuscadorApp() {
               key={coverageResetKey}
               selected={coberturas}
               onChange={setCoberturas}
-              disabled={!marcaIngresada}
+              disabled={!marcaIngresada || loading}
               compact
               resultsSlot={coverageResultsSlot}
+              onCatalogLoadingChange={setCatalogLoading}
+              onSearchingChange={setCoverageSearching}
             />
           </div>
         </div>
@@ -243,20 +264,27 @@ export function BuscadorApp() {
           aria-live="polite"
         />
 
-        <div className="mt-8 flex flex-wrap gap-3">
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
           <Button
             type="button"
             disabled={!puedeContinuar || loading}
             onClick={handleContinuar}
-            className={searchSubmitClass}
+            className={cn(searchSubmitClass, "sm:w-auto sm:min-w-[11.5rem]")}
           >
-            {loading ? copy.search.loading : copy.search.submit}
+            {loading ? (
+              <span className="inline-flex items-center justify-center gap-2">
+                <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+                {copy.search.loading}
+              </span>
+            ) : (
+              copy.search.submit
+            )}
           </Button>
           <Button
             type="button"
             variant="outline"
             onClick={handleClearSearch}
-            className="h-11 min-h-11 rounded-sm border-[#E6E6E6] px-6 text-sm font-bold text-[#111]"
+            className="h-11 min-h-11 w-full rounded-sm border-[#E6E6E6] px-6 text-sm font-bold text-[#111] sm:w-auto"
           >
             {copy.search.clear}
           </Button>
@@ -327,6 +355,9 @@ export function BuscadorApp() {
       <p className="mt-8 text-xs text-inapi-muted">
         {copy.chrome.footer.actualizacion}
       </p>
+      {searched && data && data.resultados.length > 0 ? (
+        <ScrollToTopButton />
+      ) : null}
     </main>
   );
 }

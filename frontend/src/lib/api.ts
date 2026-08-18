@@ -1,3 +1,4 @@
+import { enrichBusqueda, loadMarcasMeta } from "./marcas-meta";
 import type { BusquedaParams, BusquedaResponse } from "./types";
 
 export class ApiError extends Error {
@@ -35,6 +36,7 @@ export async function buscarMarcas(
     search.set("similitud_min", String(params.similitud_min));
   }
 
+  const metaPromise = loadMarcasMeta();
   const response = await fetch(`/api/buscar?${search.toString()}`);
 
   if (!response.ok) {
@@ -48,5 +50,7 @@ export async function buscarMarcas(
     throw new ApiError(message, response.status);
   }
 
-  return response.json() as Promise<BusquedaResponse>;
+  const data = (await response.json()) as BusquedaResponse;
+  await metaPromise;
+  return enrichBusqueda(data);
 }

@@ -1,0 +1,2 @@
+public/uploads/*.jpg filter=lfs diff=lfs merge=lfs -text
+public/data/*.json filter=lfs diff=lfs merge=lfs -text
