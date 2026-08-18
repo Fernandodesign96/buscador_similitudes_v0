@@ -18,8 +18,9 @@ import random
 import pytest
 from rapidfuzz import fuzz
 
-from buscador import config, normalizacion
+from buscador import config, indice, normalizacion
 from buscador.busqueda import MotorBusqueda
+from buscador.busqueda import _contencion_total
 from buscador.busqueda import _score_fonetico_base
 from buscador.busqueda import _score_ortografico_base
 from buscador.busqueda import _similitud_fonetica
@@ -43,8 +44,31 @@ class IndiceFalso:
         self.nombres: list[str] = [m["nombre"] for m in marcas]
         self.canonicos: list[str] = [normalizacion.limpiar(m["nombre"]) for m in marcas]
         self.foneticos: list[str] = [normalizacion.clave_fonetica(m["nombre"]) for m in marcas]
+        self.foneticos_palabras: list[str] = [
+            indice._fonetico_por_palabra(m["nombre"]) for m in marcas
+        ]
         self.clases: list[list[int]] = [m["clases"] for m in marcas]
         self.solicitudes: list[list[str]] = [m.get("solicitudes", []) for m in marcas]
+
+        # Fix 13-ago-2026 (cierre de brecha del prefiltro, ver
+        # config.PISO_CONTENCION_TOTAL): se agregan los mismos atributos de
+        # lemas/indice invertido que la version real de IndiceBusqueda (ver
+        # indice.py), para que los tests que ejercitan MotorBusqueda.buscar()
+        # tambien ejerciten de verdad el piso por contencion total del PASO
+        # 1 (prefiltro vectorizado), no solo el del recalculo exacto del
+        # paso 2.
+        self.lemas_canonico: list[tuple[str, ...]] = [
+            indice._lemas(c) for c in self.canonicos
+        ]
+        self.indice_lemas_canonico: dict[str, list[int]] = indice._indice_invertido_lemas(
+            self.lemas_canonico,
+        )
+        self.lemas_fonetico: list[tuple[str, ...]] = [
+            indice._lemas(f) for f in self.foneticos_palabras
+        ]
+        self.indice_lemas_fonetico: dict[str, list[int]] = indice._indice_invertido_lemas(
+            self.lemas_fonetico,
+        )
 
     def __len__(self) -> int:
         return len(self.mark_codes)
@@ -170,24 +194,35 @@ def test_homofono_sigue_dando_score_alto():
     assert _similitud_fonetica("cauquenes", "kaukenes") == 100.0
 
 
-def test_similitud_fonetica_nunca_supera_el_score_bruto():
+def test_similitud_fonetica_nunca_supera_el_score_bruto_o_el_piso():
     """El descuento de palabras comunes no puede subir el score por encima
-    del que calcularia cdist sobre el texto completo (sin descuento).
+    del que calcularia cdist sobre el texto completo (sin descuento) --
+    SALVO la excepcion intencional del piso por contencion total (fix
+    13-ago-2026, ver config.PISO_CONTENCION_TOTAL y _contencion_total()):
+    cuando una de las dos marcas esta enteramente contenida en la otra (por
+    lema) y no es generica, el piso SI puede superar el score bruto pareado
+    de esta funcion a proposito -- por eso ya no se compara contra ese
+    bruto solo, sino contra max(bruto, piso esperado).
 
-    Este es el invariante del que depende el prefiltro de dos etapas en
-    MotorBusqueda.buscar(): si _similitud_fonetica pudiera superar el score
-    bruto, un candidato real podria quedar fuera del top-N del prefiltro y
-    nunca llegar al recalculo exacto (bug corregido el 03-ago-2026, antes
-    de este fix la funcion no aplicaba min() como si hace
-    _similitud_ortografica). Se prueba con pares generados al azar (mezcla
-    de palabras y letras) para no depender solo de los ejemplos de mano
-    usados en los demas tests.
+    Antes de este fix el invariante era "nunca sube el bruto, punto"
+    (bug corregido el 03-ago-2026, antes de eso la funcion no aplicaba
+    min() como si hace _similitud_ortografica). Ese invariante seguia
+    siendo necesario porque el prefiltro de dos etapas en
+    MotorBusqueda.buscar() dependia de el para no perder candidatos. Con
+    el piso, la garantia se traslado: ya no es "esta funcion nunca supera
+    su propio bruto pareado", sino "el prefiltro vectorizado (paso 1) nunca
+    calcula, para un candidato, un score bruto menor al que esta funcion
+    podria devolverle" -- eso se prueba aparte en
+    test_prefiltro_incluye_el_piso_por_contencion_total(), ejercitando
+    MotorBusqueda.buscar() de punta a punta. Aqui solo se documenta y
+    verifica la excepcion puntual a nivel de la funcion pareada.
 
-    El "bruto" de referencia usa _score_fonetico_base(), no fuzz.ratio()
-    directo: desde el fix 06-ago-2026 PM ese es el calculo real que hace el
-    prefiltro vectorizado de MotorBusqueda.buscar() (fuzz.ratio combinado
-    con Jaro-Winkler, no fuzz.ratio solo), asi que es la cota superior real
-    contra la que hay que verificar el invariante.
+    Se prueba con pares generados al azar (mezcla de palabras y letras)
+    para no depender solo de los ejemplos de mano usados en los demas
+    tests. El "bruto" de referencia usa _score_fonetico_base(), no
+    fuzz.ratio() directo: desde el fix 06-ago-2026 PM ese es el calculo
+    real que hace el prefiltro vectorizado de MotorBusqueda.buscar()
+    (fuzz.ratio combinado con Jaro-Winkler, no fuzz.ratio solo).
     """
     random.seed(0)
     letras = "abcdefghijklmnopqrstuvwxyz"
@@ -209,8 +244,94 @@ def test_similitud_fonetica_nunca_supera_el_score_bruto():
         score_bruto = _score_fonetico_base(
             normalizacion.clave_fonetica(a), normalizacion.clave_fonetica(b),
         )
+
+        wa, wb = a.split(), b.split()
+        claves_a = [normalizacion.clave_fonetica(w) for w in wa]
+        claves_b = [normalizacion.clave_fonetica(w) for w in wb]
+        lemas_a = [normalizacion.lema(c) for c in claves_a]
+        lemas_b = [normalizacion.lema(c) for c in claves_b]
+        # frecuencias=None: igual que la llamada a _similitud_fonetica(a, b)
+        # mas abajo, sin tabla de frecuencias -- mismo criterio de
+        # genericidad (ninguno, en este test) en ambos lados.
+        piso = _contencion_total(claves_a, claves_b, lemas_a, lemas_b, frecuencias=None, clases=None)
+        cota = max(score_bruto, piso) if piso is not None else score_bruto
+
         score_exacto = _similitud_fonetica(a, b)
-        assert score_exacto <= score_bruto + 1e-9, (a, b, score_exacto, score_bruto)
+        assert score_exacto <= cota + 1e-9, (a, b, score_exacto, score_bruto, piso)
+
+
+def test_similitud_ortografica_nunca_supera_el_score_bruto_o_el_piso():
+    """Equivalente ortografico del test anterior (fix 13-ago-2026): mismo
+    invariante relajado por la misma excepcion intencional del piso por
+    contencion total.
+    """
+    random.seed(0)
+    letras = "abcdefghijklmnopqrstuvwxyz"
+    palabras_base = ["beer", "chile", "casa", "blanca", "sol", "mar", "kids"]
+
+    def marca_al_azar():
+        n_palabras = random.randint(1, 3)
+        palabras = []
+        for _ in range(n_palabras):
+            if random.random() < 0.5:
+                palabras.append(random.choice(palabras_base))
+            else:
+                largo = random.randint(3, 8)
+                palabras.append("".join(random.choice(letras) for _ in range(largo)))
+        return " ".join(palabras)
+
+    for _ in range(200):
+        a, b = marca_al_azar(), marca_al_azar()
+        score_bruto = _score_ortografico_base(a, b)
+
+        wa, wb = a.split(), b.split()
+        lemas_a = [normalizacion.lema(w) for w in wa]
+        lemas_b = [normalizacion.lema(w) for w in wb]
+        piso = _contencion_total(wa, wb, lemas_a, lemas_b, frecuencias=None, clases=None)
+        cota = max(score_bruto, piso) if piso is not None else score_bruto
+
+        score_exacto = _similitud_ortografica(a, b)
+        assert score_exacto <= cota + 1e-9, (a, b, score_exacto, score_bruto, piso)
+
+
+def test_prefiltro_incluye_el_piso_por_contencion_total():
+    """Fix 13-ago-2026 (cierre de la brecha documentada en
+    config.PISO_CONTENCION_TOTAL): antes de este fix, un candidato cuyo
+    score BRUTO (sin el piso) era bajo por la diferencia de largo entre
+    las dos denominaciones -- pero que calificaba para el piso en el
+    recalculo exacto -- podia quedar fuera del top-CANDIDATOS_PREFILTRO
+    del paso 1 y nunca llegar al paso 2 a recibirlo. Ver el caso real que
+    motivo el fix: "ROYAL" no encontraba a "ROYAL GUARD, UN MERECIDO
+    RELAJO".
+
+    Se agrega ruido muy por encima de CANDIDATOS_PREFILTRO para ejercitar
+    de verdad la rama de argpartition (los demas tests de este archivo
+    usan universos chicos donde nunca se recorta nada), con una marca real
+    cuyo score bruto contra la consulta es deliberadamente bajo.
+    """
+    random.seed(3)
+    letras = "abcdefghijklmnopqrstuvwxyz"
+
+    def ruido_al_azar():
+        largo = random.randint(4, 10)
+        return "".join(random.choice(letras) for _ in range(largo)).upper()
+
+    n_ruido = config.CANDIDATOS_PREFILTRO * 3
+    marcas = [
+        {"mark_code": i + 1, "nombre": ruido_al_azar(), "clases": [25]}
+        for i in range(n_ruido)
+    ]
+    marcas.append({
+        "mark_code": 999,
+        "nombre": "ROYAL GUARD UN MERECIDO RELAJO",
+        "clases": [25],
+    })
+
+    indice_falso = IndiceFalso(marcas)
+    motor = MotorBusqueda(indice_falso)
+    resultados = motor.buscar("ROYAL", clases_consulta=[25], top=5)
+
+    assert any(r.mark_code == 999 for r in resultados)
 
 
 def test_residuo_corto_no_castiga_variante_casi_identica():

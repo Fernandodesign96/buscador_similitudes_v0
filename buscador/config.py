@@ -66,7 +66,7 @@ SIMILITUD_MIN_RESULTADOS: float = 75.0
 
 # Umbral de relacion de clase NCL: si las marcas no comparten clase, el score
 # combinado se atenua por este factor (clases no relacionadas = menor riesgo).
-FACTOR_CLASE_NO_RELACIONADA: float = 0.5
+FACTOR_CLASE_NO_RELACIONADA: float = 0.7
 
 # Longitud minima (en caracteres, sin contar espacios) que debe tener el
 # residuo de CADA marca, en busqueda.py, tras descontar las palabras/claves
@@ -134,6 +134,66 @@ UMBRAL_FRECUENCIA_GENERICO: float = 0.01
 # palabra repetida 3 veces en una clase de 50 marcas ya es 6%, sin que eso
 # signifique que sea realmente generica).
 CONTEO_MINIMO_GENERICO: int = 20
+
+# --- Piso por contencion total (prototipo 13-ago-2026, en validacion) ------
+# Detectado analizando los rechazos M10 de 2025 reales (sin acceso a SQL
+# Server, usando el nombre de la anterioridad extraido del propio texto de
+# la observacion): el 31% de los casos sin acierto en el top-10 tienen una
+# diferencia de 2+ palabras entre la solicitud y la marca citada (ej. "TU
+# ASTRO CAFE" no encuentra a "ASTRO"; "VECTOR LOVE STORY" no encuentra a
+# "VECTOR"; "HUAYU REMOTE COTROL" no encuentra a "HUAYU"), con un score
+# promedio ~11 puntos mas bajo que el resto de los fallos.
+#
+# Causa: cuando una de las dos denominaciones queda vacia tras el descuento
+# de comunes (_palabras_comunes_fuera), _similitud_ortografica/_fonetica ya
+# reconocen que "una marca es casi subconjunto de la otra" y NO aplican el
+# castigo -- pero devuelven score_base sin modificar, que sigue siendo el
+# ratio bruto de las dos cadenas completas (una mucho mas larga que la
+# otra), diluido por las palabras sobrantes del lado largo aunque esas
+# palabras no sean genericas. No hay ningun mecanismo que premie el hecho de
+# que la marca corta esta contenida, ENTERA, como palabra o palabras
+# completas de la marca larga -- que es precisamente la doctrina del
+# "elemento dominante" (Sabel v. Puma, C-251/95) que este motor ya invoca
+# para el descuento de genericos, pero aplicada aqui de forma incompleta:
+# hoy solo protege el elemento dominante cuando el sobrante es generico: no
+# cuando una marca completa es, literalmente, una palabra entera de la otra
+# (sea o no generico el resto).
+#
+# PISO_CONTENCION_TOTAL: score minimo (0-100) que se aplica --como maximo
+# con el score ya calculado, nunca lo baja-- cuando TODAS las palabras de
+# una de las dos marcas (por lema) estan contenidas en las palabras de la
+# otra, Y ninguna de esas palabras contenidas es generica por frecuencia en
+# la clase NCL del candidato (ver _contencion_total() en busqueda.py). Se
+# excluye deliberadamente el caso generico (ej. "SKAAL BEER" vs "BEER": NO
+# debe recibir este piso, "BEER" no aporta distintividad) para no
+# reintroducir el problema que el descuento de genericos existe para
+# resolver.
+#
+# Valor elegido tras validar contra los 743 casos sin acierto de la
+# validacion 2025 (ver notebook/registro de validacion): 82.0 queda por
+# encima de SIMILITUD_MIN_RESULTADOS (75) sin llegar al rango de una
+# coincidencia exacta (~95-100), dejando lugar a que coincidencias mas
+# literales sigan rankeando mas arriba.
+#
+# Fix 13-ago-2026 (cierre de brecha, deploy): al agregar este piso se dejo
+# documentada una advertencia -- "el prefiltro vectorizado (paso 1) no
+# incluye todavia esta senal, un candidato con score bruto muy bajo puede
+# quedar fuera del top-CANDIDATOS_PREFILTRO y nunca llegar al paso 2 para
+# recibir el piso" -- que ya esta resuelta: IndiceBusqueda precalcula un
+# indice invertido lema -> marcas (ver indice._indice_invertido_lemas) y
+# MotorBusqueda.buscar() lo usa en el PASO 1, antes del recorte a
+# CANDIDATOS_PREFILTRO, para encontrar los candidatos que podrian calificar
+# (misma logica exacta de largo minimo y genericidad que _contencion_total())
+# y subir su score bruto de cada senal a este piso antes de seleccionar el
+# top-N. Ver _candidatos_contencion_total() en busqueda.py.
+PISO_CONTENCION_TOTAL: float = 82.0
+
+# Longitud minima (sin espacios) que debe tener la marca contenida para
+# aplicar el piso anterior. Mismo espiritu que LONGITUD_MINIMA_RESIDUO_
+# DESCUENTO: por debajo de este umbral, un piso automatico es mas riesgoso
+# que util (una palabra de 3-4 letras contenida en muchas otras marcas por
+# pura coincidencia, sin ser realmente el elemento distintivo compartido).
+LARGO_MINIMO_CONTENCION_TOTAL: int = 5
 
 # --- Ponderacion por inicio de palabra (Jaro-Winkler) ----------------------
 # Fix 06-ago-2026 PM: un consumidor real presta mas atencion al inicio de

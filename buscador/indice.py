@@ -69,6 +69,30 @@ def _preparar_representaciones(marcas: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _lemas(texto: str) -> tuple[str, ...]:
+    """Lema (normalizacion.lema) de cada palabra de `texto`, en el mismo
+    orden. Se usa para precalcular, una sola vez por marca del universo, la
+    representacion que necesita el piso de contencion total (ver
+    busqueda._contencion_total y MotorBusqueda.buscar()) sin recalcularla en
+    cada consulta.
+    """
+    return tuple(normalizacion.lema(w) for w in texto.split())
+
+
+def _indice_invertido_lemas(listas_de_lemas: list[tuple[str, ...]]) -> dict[str, list[int]]:
+    """Mapa lema -> lista de indices de marcas cuyo conjunto de lemas incluye
+    ese lema. Permite, dada la consulta, encontrar en O(candidatos
+    relevantes) -- no en O(218k) -- las marcas relacionadas por contencion
+    total (ver _candidatos_contencion_total en busqueda.py), sin recorrer el
+    universo completo por consulta.
+    """
+    indice: dict[str, list[int]] = defaultdict(list)
+    for i, lemas in enumerate(listas_de_lemas):
+        for lema in set(lemas):  # set(): no duplicar si la marca repite la palabra
+            indice[lema].append(i)
+    return dict(indice)
+
+
 @dataclass(frozen=True)
 class FrecuenciasPalabras:
     """Frecuencia de cada lema de palabra, por clase NCL, en el universo de
@@ -176,6 +200,31 @@ class IndiceBusqueda:
         )
         self.frecuencias_foneticas: FrecuenciasPalabras = _construir_frecuencias(
             marcas, "fonetico_palabras",
+        )
+
+        # Claves foneticas por palabra (con limites de palabra preservados,
+        # a diferencia de self.foneticos que las funde): las necesita el
+        # piso de contencion total del lado fonetico (ver busqueda.py) para
+        # poder reconstruir, por candidato, las mismas "palabras" (claves
+        # foneticas) y lemas que usa _contencion_total().
+        self.foneticos_palabras: list[str] = marcas["fonetico_palabras"].tolist()
+
+        # Lemas por marca (fix 13-ago-2026, cierre de la brecha documentada
+        # en config.PISO_CONTENCION_TOTAL: "este piso solo esta aplicado en
+        # el recalculo exacto, el prefiltro vectorizado no lo incluye
+        # todavia"): se precalculan una sola vez aqui, junto con su indice
+        # invertido lema -> marcas, para que MotorBusqueda.buscar() pueda
+        # encontrar en el PASO 1 (antes del recorte a CANDIDATOS_PREFILTRO)
+        # que candidatos podrian calificar para el piso de contencion
+        # total, sin recorrer las 218k marcas por consulta (ver
+        # busqueda._candidatos_contencion_total()).
+        self.lemas_canonico: list[tuple[str, ...]] = [_lemas(c) for c in self.canonicos]
+        self.indice_lemas_canonico: dict[str, list[int]] = _indice_invertido_lemas(
+            self.lemas_canonico,
+        )
+        self.lemas_fonetico: list[tuple[str, ...]] = [_lemas(f) for f in self.foneticos_palabras]
+        self.indice_lemas_fonetico: dict[str, list[int]] = _indice_invertido_lemas(
+            self.lemas_fonetico,
         )
 
         logger.info("Universo cargado: %d marcas oponibles.", len(self.mark_codes))
