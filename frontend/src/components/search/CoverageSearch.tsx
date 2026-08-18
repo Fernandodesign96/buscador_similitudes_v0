@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { CircleHelp, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { createPortal, flushSync } from "react-dom";
+import { CircleHelp, Loader2, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,8 +18,10 @@ import { searchCoberturas } from "@/lib/ncl-fuse";
 import { NCL_CLASSES } from "@/lib/ncl-classes";
 import {
   searchControlClass,
+  searchControlLockedClass,
   searchFieldLabelClass,
   searchSubmitClass,
+  searchSubmitLockedClass,
 } from "@/lib/search-layout";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,8 @@ interface CoverageSearchProps {
   compact?: boolean;
   /** Contenedor donde renderizar resultados (columna izquierda). */
   resultsSlot?: HTMLElement | null;
+  onCatalogLoadingChange?: (loading: boolean) => void;
+  onSearchingChange?: (searching: boolean) => void;
 }
 
 function groupByClass(items: NclCobertura[]) {
@@ -133,6 +136,8 @@ export function CoverageSearch({
   disabled = false,
   compact = false,
   resultsSlot,
+  onCatalogLoadingChange,
+  onSearchingChange,
 }: CoverageSearchProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -166,6 +171,14 @@ export function CoverageSearch({
     };
   }, []);
 
+  useEffect(() => {
+    onCatalogLoadingChange?.(loadingCatalog);
+  }, [loadingCatalog, onCatalogLoadingChange]);
+
+  useEffect(() => {
+    onSearchingChange?.(searching);
+  }, [searching, onSearchingChange]);
+
   const selectedIds = new Set(selected.map((s) => s.id));
 
   const toggle = (item: NclCobertura) => {
@@ -186,22 +199,51 @@ export function CoverageSearch({
 
   const groups = useMemo(() => groupByClass(filtered), [filtered]);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const inFlight = useRef(false);
+
+  const runCoverageSearch = async () => {
     const q = query.trim();
-    if (q.length < 2 || loadingCatalog || catalogError) return;
-    setSearching(true);
-    setSearched(true);
+    if (q.length < 2 || loadingCatalog || catalogError || inFlight.current) {
+      return;
+    }
+    inFlight.current = true;
+    const inicio = Date.now();
+
+    flushSync(() => {
+      setSearching(true);
+      setSearched(true);
+      onSearchingChange?.(true);
+    });
+
     try {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
       const { fuse } = await loadNclCatalog();
-      setResults(searchCoberturas(fuse, q));
+      const encontrados = searchCoberturas(fuse, q);
+      const resta = 500 - (Date.now() - inicio);
+      if (resta > 0) {
+        await new Promise((resolve) => setTimeout(resolve, resta));
+      }
+      setResults(encontrados);
     } finally {
+      inFlight.current = false;
       setSearching(false);
+      onSearchingChange?.(false);
     }
   };
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    void runCoverageSearch();
+  };
+
+  const botonOcupado = loadingCatalog || searching;
+
   const inputDisabled =
-    disabled || loadingCatalog || Boolean(catalogError);
+    disabled || loadingCatalog || searching || Boolean(catalogError);
 
   const resultsPanel =
     results && results.length > 0 ? (
@@ -353,13 +395,15 @@ export function CoverageSearch({
               className={cn(
                 searchControlClass,
                 "text-left",
-                query.length > 0 && "pr-10",
-                disabled && "cursor-not-allowed bg-[#F5F5F5] text-inapi-muted",
+                query.length > 0 && !inputDisabled && "pr-10",
+                inputDisabled && searchControlLockedClass,
               )}
               autoComplete="off"
               disabled={inputDisabled}
+              readOnly={inputDisabled}
+              aria-disabled={inputDisabled}
             />
-            {query.length > 0 && (
+            {query.length > 0 && !inputDisabled && (
               <button
                 type="button"
                 onClick={() => {
@@ -375,27 +419,28 @@ export function CoverageSearch({
               </button>
             )}
           </div>
-          <Button
+          <button
             type="submit"
+            aria-busy={botonOcupado}
             disabled={
-              disabled ||
-              query.trim().length < 2 ||
-              loadingCatalog ||
-              searching ||
-              Boolean(catalogError)
+              Boolean(catalogError) ||
+              (!botonOcupado && (disabled || query.trim().length < 2))
             }
             className={cn(
               searchSubmitClass,
-              "sm:w-auto",
-              disabled && "opacity-60",
+              "inline-flex items-center justify-center gap-2 sm:w-auto",
+              botonOcupado && searchSubmitLockedClass,
             )}
           >
+            {botonOcupado ? (
+              <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+            ) : null}
             {loadingCatalog
               ? copy.coverage.loadingCatalog
               : searching
                 ? copy.coverage.searching
                 : copy.coverage.submit}
-          </Button>
+          </button>
         </div>
       </form>
 

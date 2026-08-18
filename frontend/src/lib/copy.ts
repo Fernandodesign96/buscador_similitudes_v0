@@ -89,7 +89,7 @@ export const copy = {
     submit: "Buscar producto o servicio",
     clearAria: "Limpiar búsqueda de producto o servicio",
     loadingCatalog: "Cargando catálogo…",
-    searching: "Buscando coberturas…",
+    searching: "Buscando...",
     empty:
       "No encontramos coberturas parecidas. Prueba otras palabras o elige la clase si ya la conoces.",
     selectedTitle: (n: number) =>
@@ -130,8 +130,9 @@ export const copy = {
     claseRelacionada: "Misma clase de productos o servicios",
     ortografica: "Parecido al escribir",
     fonetica: "Parecido al pronunciar",
-    /** Tramos: ≥95, ≥90, ≥85, ≥80, <80. */
+    /** Tramos: 100, ≥95, ≥90, ≥85, ≥80, <80. */
     bandaEscribir: {
+      exacto: "Exactamente igual al escribir",
       sobre95: "Demasiada similitud al escribir",
       sobre90: "Mucha similitud al escribir",
       sobre85: "Bastante similitud al escribir",
@@ -139,6 +140,7 @@ export const copy = {
       bajo80: "Poca similitud al escribir",
     },
     bandaPronunciar: {
+      exacto: "Exactamente igual al pronunciar",
       sobre95: "Demasiada similitud al pronunciar",
       sobre90: "Mucha similitud al pronunciar",
       sobre85: "Bastante similitud al pronunciar",
@@ -158,6 +160,9 @@ export const copy = {
     coberturaTitulo:
       "Clases encontradas para esta marca, las azules son idénticas a las tuyas",
     estadoChip: "Estado de la marca",
+    registrada: "Registrada",
+    enTramite: "En trámite",
+    anioEstado: "Año del estado",
     verDetalle: "Ver detalle de la marca",
     guiaDetalle: {
       muy: "Tu marca presenta varias similitudes, revisa en detalle las características de esta marca antes de iniciar tu solicitud.",
@@ -166,6 +171,7 @@ export const copy = {
     },
     mostrando: (shown: number, total: number) =>
       `Mostrando ${shown} de ${total} marcas parecidas`,
+    volverArriba: "Subir al inicio",
   },
   help: {
     title: "¿Cómo leer estos resultados?",
@@ -199,14 +205,22 @@ export const copy = {
     backCrumb: "Marcas parecidas",
     kindFallback: "Marca de palabra",
     visualTitulo: "Cómo se ve",
-    idsTitulo: "Identificación",
+    idsTitulo: "Detalles de la marca",
     datesTitulo: "Fechas importantes",
     coverageTitulo: "Productos o servicios que cubre",
+    clase: (n: number): string => `Clase ${n}`,
+    claseIdentica: "Idéntica a la clase que solicitas",
     ownerTitulo: "Dueño o dueña",
     statusTitulo: "Estado del trámite",
     solicitud: "N.° de solicitud",
     solicitudTip:
       "Número que INAPI asigna cuando alguien pide registrar una marca.",
+    markCode: "Código de marca",
+    markCodeTip:
+      "Identificador interno de la marca en los registros de INAPI.",
+    anioEstado: "Año del estado",
+    anioEstadoTip:
+      "Año en que se registró el estado actual de la marca.",
     registro: "N.° de registro",
     registroTip: "Número que identifica la marca cuando ya está inscrita.",
     estado: "Estado",
@@ -221,7 +235,7 @@ export const copy = {
     unavailableHint:
       "Este dato llegará cuando se conecte la ficha completa de la marca. Mientras tanto puedes revisar el nombre y las clases.",
     scoreHint: "Orientación de parecido, no un rechazo automático.",
-    irSolicitar: "Ir a solicitar tu marca",
+    irSolicitar: "Iniciar solicitud de marca",
   },
   pagination: {
     anterior: "Página anterior",
@@ -283,7 +297,7 @@ export const copy = {
         accesibilidad: "Declaración de accesibilidad",
         arco: "Política de privacidad y derechos ARCO",
       },
-      actualizacion: "Última actualización: 14-08-2026",
+      actualizacion: "Última actualización: 17-08-2026",
     },
   },
 } as const;

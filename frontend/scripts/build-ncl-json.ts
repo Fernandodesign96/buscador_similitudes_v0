@@ -1,5 +1,6 @@
 /**
- * Genera public/data/ncl-coberturas.json desde el CSV del clasificador INAPI.
+ * Genera public/data/ncl-coberturas.json desde el CSV del clasificador INAPI
+ * (carpeta local gitignored: claseniza_y_coberturas/).
  * Uso (desde frontend/): bun run build:ncl
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";

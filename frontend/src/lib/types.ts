@@ -4,9 +4,9 @@ export interface DesgloseSimilitud {
 }
 
 /**
- * Campos opcionales: el API actual solo envía nombre, clases, similitud,
- * desglose y clase_relacionada. El resto se muestra como «no disponible»
- * hasta que Camila los agregue (ver frontend/PROPUESTA-DETALLE-MARCA.md).
+ * El API envía nombre, clases, similitud, desglose y clase_relacionada.
+ * Si llega `mark_code` (como en el parquet), el frontend cruza el Excel por
+ * esa llave. Si no, usa nombre + clases. Estado y año salen del Excel.
  */
 export interface Resultado {
   nombre: string;
@@ -16,6 +16,7 @@ export interface Resultado {
   clase_relacionada: boolean;
   mark_code?: number;
   estado?: string;
+  anio_estado?: number;
   solicitudes?: string[];
   nro_registro?: string;
   tipo?: string;

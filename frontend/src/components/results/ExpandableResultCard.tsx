@@ -2,7 +2,12 @@
 
 import { Button } from "@/components/ui/button";
 import { copy } from "@/lib/copy";
+import {
+  clasePuntoEstado,
+  etiquetaEstadoCard,
+} from "@/lib/estado-marca";
 import type { ResultCardDisplay } from "@/lib/result-card-meta";
+import { solicitudMasReciente } from "@/lib/result-card-meta";
 import { cn } from "@/lib/utils";
 
 export interface ExpandableResultCardProps {
@@ -10,25 +15,47 @@ export interface ExpandableResultCardProps {
   onVerDetalle: () => void;
 }
 
-const COL_MARCA = "sm:w-[220px] sm:min-w-[220px] sm:max-w-[220px]";
+const COL_MARCA = "sm:w-[260px] sm:min-w-[260px] sm:max-w-[260px]";
 
 export function ExpandableResultCard({
   marca,
   onVerDetalle,
 }: ExpandableResultCardProps) {
-  const estado = marca.estado?.trim() || copy.results.estadoChip;
+  const estado = marca.estado?.trim();
+  const etiquetaEstado = etiquetaEstadoCard(estado);
+  const puntoEstado = clasePuntoEstado(estado);
+  const anio = marca.anio_estado;
+  const solicitud = solicitudMasReciente(marca.solicitudes);
 
   return (
-    <article className="overflow-hidden rounded-lg border border-inapi-border bg-white px-5 py-4">
+    <article className="overflow-hidden rounded-lg border border-inapi-border bg-white px-5 py-4 transition-[border-color,box-shadow,background-color] duration-150 hover:border-inapi-blue hover:bg-[#f7fafc] hover:shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-0">
-        <div className={cn("flex min-w-0 shrink-0 flex-col gap-3", COL_MARCA)}>
-          <p className="text-lg font-bold tracking-wide text-[#111]">
+        <div className={cn("flex min-w-0 shrink-0 flex-col gap-1.5", COL_MARCA)}>
+          <p className="text-2xl font-bold leading-tight tracking-wide text-[#111]">
             {marca.nombre}
           </p>
-          <p className="text-sm text-inapi-muted">{estado}</p>
-          <p className="text-base font-semibold leading-snug text-[#373737]">
-            {marca.razonSocial}
+          <p className="flex items-center gap-2 text-base font-semibold leading-snug text-inapi-text">
+            {puntoEstado ? (
+              <span
+                className={cn("size-2.5 shrink-0 rounded-full", puntoEstado)}
+                aria-hidden
+              />
+            ) : null}
+            {etiquetaEstado}
           </p>
+          {anio && anio > 0 ? (
+            <p className="text-sm text-inapi-muted">{anio}</p>
+          ) : null}
+          {marca.razonSocial ? (
+            <p className="text-sm font-medium leading-snug text-inapi-text">
+              {marca.razonSocial}
+            </p>
+          ) : null}
+          {solicitud ? (
+            <p className="text-sm text-inapi-muted">
+              {copy.detail.solicitud}: {solicitud}
+            </p>
+          ) : null}
         </div>
 
         <div
