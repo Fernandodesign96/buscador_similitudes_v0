@@ -3,4 +3,4 @@ uploads/*.jpg filter=lfs diff=lfs merge=lfs -text
 frontend/public/uploads/*.jpg filter=lfs diff=lfs merge=lfs -text
 frontend/claseniza_y_coberturas/*.csv filter=lfs diff=lfs merge=lfs -text
 frontend/public/data/*.json filter=lfs diff=lfs merge=lfs -text
-frontend/public/marcas-meta.json} filter=lfs diff=lfs merge=lfs -text
+frontend/public/marcas-meta.json filter=lfs diff=lfs merge=lfs -text
