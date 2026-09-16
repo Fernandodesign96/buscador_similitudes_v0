@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CircleHelp, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -20,17 +20,15 @@ import { ResultsEmptyState } from "@/components/results/ResultsEmptyState";
 import { ResultsGuidance } from "@/components/results/ResultsGuidance";
 import { ResultsPagination } from "@/components/results/ResultsPagination";
 import { ScrollToTopButton } from "@/components/results/ScrollToTopButton";
-import { CoverageSearch } from "@/components/search/CoverageSearch";
+import { ClassPicker } from "@/components/search/ClassPicker";
 import { ApiError, buscarMarcas } from "@/lib/api";
 import { copy } from "@/lib/copy";
-import type { NclCobertura } from "@/lib/ncl-coberturas";
 import { toResultCardDisplay } from "@/lib/result-card-meta";
 import type { BusquedaResponse, Resultado } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { SIMILITUD_MIN_RESULTADOS } from "@/lib/similarity";
 import {
   searchControlClass,
-  searchControlLockedClass,
   searchFieldLabelClass,
   searchPanelClass,
   searchSubmitClass,
@@ -54,39 +52,22 @@ export function BuscadorApp() {
   const perPage = usePerPage();
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [consulta, setConsulta] = useState("");
-  const [coberturas, setCoberturas] = useState<NclCobertura[]>([]);
+  const [clases, setClases] = useState<number[]>([]);
+  const [buscarTodas, setBuscarTodas] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<BusquedaResponse | null>(null);
   const [searched, setSearched] = useState(false);
   const [howOpen, setHowOpen] = useState(false);
   const [detailResult, setDetailResult] = useState<Resultado | null>(null);
-  const [coverageResultsSlot, setCoverageResultsSlot] =
-    useState<HTMLDivElement | null>(null);
-  const [coverageResetKey, setCoverageResetKey] = useState(0);
-  const [catalogLoading, setCatalogLoading] = useState(true);
-  const [coverageSearching, setCoverageSearching] = useState(false);
 
-  const camposBloqueados =
-    catalogLoading || loading || coverageSearching;
+  const puedeContinuar = consulta.trim().length > 0;
+  const clasesEfectivas = buscarTodas ? [] : clases;
+  const modoClases = clasesEfectivas.length > 0 ? "filtrar" : "atenuar";
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [detailResult]);
-
-  const onCoverageResultsSlot = useCallback((node: HTMLDivElement | null) => {
-    setCoverageResultsSlot(node);
-  }, []);
-
-  const marcaIngresada = consulta.trim().length > 0;
-
-  const clasesEfectivas = useMemo(
-    () =>
-      [...new Set(coberturas.map((c) => c.clase))].sort((a, b) => a - b),
-    [coberturas],
-  );
-
-  const puedeContinuar = marcaIngresada && coberturas.length > 0;
 
   const ejecutarBusqueda = useCallback(
     async (q: string, pageNum: number) => {
@@ -103,7 +84,7 @@ export function BuscadorApp() {
           q: trimmed,
           clases: clasesEfectivas,
           top: 200,
-          modo_clases: "filtrar",
+          modo_clases: modoClases,
           similitud_min: SIMILITUD_MIN_RESULTADOS,
           page: pageNum,
           per_page: perPage,
@@ -120,7 +101,7 @@ export function BuscadorApp() {
         setLoading(false);
       }
     },
-    [clasesEfectivas, perPage],
+    [clasesEfectivas, modoClases, perPage],
   );
 
   const handleContinuar = () => {
@@ -134,18 +115,17 @@ export function BuscadorApp() {
 
   const handleClearSearch = () => {
     setConsulta("");
-    setCoberturas([]);
+    setClases([]);
+    setBuscarTodas(true);
     setData(null);
     setError(null);
     setSearched(false);
     setDetailResult(null);
-    setCoverageResetKey((key) => key + 1);
   };
 
   const handleConsultaChange = (value: string) => {
     setConsulta(value);
     if (!value.trim()) {
-      setCoberturas([]);
       setData(null);
       setError(null);
       setSearched(false);
@@ -179,7 +159,7 @@ export function BuscadorApp() {
       </header>
 
       <section className={searchPanelClass}>
-        <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
+        <div className="grid w-full gap-4 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
           <div className="min-w-0">
             <div className={searchFieldLabelClass}>
               <span className="flex items-center gap-1.5">
@@ -226,43 +206,26 @@ export function BuscadorApp() {
               type="text"
               value={consulta}
               onChange={(e) => handleConsultaChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleContinuar();
+                }
+              }}
               placeholder={copy.search.placeholder}
-              className={cn(
-                searchControlClass,
-                "text-left",
-                camposBloqueados && searchControlLockedClass,
-              )}
+              className={cn(searchControlClass, "text-left")}
               autoComplete="off"
-              disabled={camposBloqueados}
-              readOnly={camposBloqueados}
-              aria-disabled={camposBloqueados}
+              disabled={loading}
             />
           </div>
 
-          <div
-            className={cn(
-              "min-w-0 transition-opacity",
-              !marcaIngresada && "opacity-60",
-            )}
-          >
-            <CoverageSearch
-              key={coverageResetKey}
-              selected={coberturas}
-              onChange={setCoberturas}
-              disabled={!marcaIngresada || loading}
-              compact
-              resultsSlot={coverageResultsSlot}
-              onCatalogLoadingChange={setCatalogLoading}
-              onSearchingChange={setCoverageSearching}
-            />
-          </div>
+          <ClassPicker
+            selected={clases}
+            onChange={setClases}
+            buscarTodas={buscarTodas}
+            onBuscarTodasChange={setBuscarTodas}
+          />
         </div>
-
-        <div
-          ref={onCoverageResultsSlot}
-          className="mt-6 w-full"
-          aria-live="polite"
-        />
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
           <Button
@@ -284,6 +247,7 @@ export function BuscadorApp() {
             type="button"
             variant="outline"
             onClick={handleClearSearch}
+            aria-label={copy.search.clearAria}
             className="h-11 min-h-11 w-full rounded-sm border-[#E6E6E6] px-6 text-sm font-bold text-[#111] sm:w-auto"
           >
             {copy.search.clear}
@@ -325,10 +289,7 @@ export function BuscadorApp() {
                   <ul className="list-none space-y-3">
                     {data.resultados.map((r, index) => {
                       const cardId = `${r.nombre}-${index}`;
-                      const display = toResultCardDisplay(
-                        r,
-                        clasesEfectivas,
-                      );
+                      const display = toResultCardDisplay(r, clasesEfectivas);
                       return (
                         <li key={cardId}>
                           <ExpandableResultCard

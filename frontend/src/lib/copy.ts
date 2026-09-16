@@ -14,7 +14,7 @@ export const copy = {
     subtitleLanding:
       "Usa esta herramienta antes de pedir el registro de tu marca.",
     subtitleSearch:
-      "Escribe el nombre de tu marca y el producto o servicio para ver marcas parecidas.",
+      "Escribe el nombre de tu marca para ver marcas parecidas.",
   },
   landing: {
     queEsTitulo: "¿Qué hace este buscador?",
@@ -67,7 +67,7 @@ export const copy = {
     submit: "Continuar",
     loading: "Buscando marcas parecidas…",
     clear: "Limpiar",
-    clearAria: "Limpiar nombre, producto o servicio y resultados",
+    clearAria: "Limpiar nombre de marca y resultados",
   },
   coverage: {
     label: "Producto o servicio de tu marca",
@@ -122,7 +122,7 @@ export const copy = {
     ] as const,
     emptyTitle: "No encontramos marcas con un alto parecido a la tuya",
     emptyHint: (q: string) =>
-      `Marca buscada: «${q}». Puedes probar con otra Clase de Niza y cobertura (producto o servicio). Si tiene números, pruébala también escrita en palabras.`,
+      `Marca buscada: «${q}». Puedes probar de nuevo o, si ya sabes la clase, filtrar por ella. Si tiene números, pruébala también escrita en palabras.`,
     emptyDisclaimer:
       "Ten en cuenta que este resultado no decide si INAPI aceptará o rechazará tu solicitud.",
     error: (msg: string) =>
