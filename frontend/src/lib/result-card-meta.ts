@@ -4,10 +4,16 @@ import { SIMILITUD_MIN_RESULTADOS } from "@/lib/similarity";
 
 export type NivelParecido = "muy" | "algo" | "poco";
 
+export interface ClaseResumenCard {
+  clase: number;
+  identica: boolean;
+}
+
 export interface ResultCardDisplay extends Resultado {
   razonSocial?: string;
   nivelParecido: NivelParecido;
   resumenItems: string[];
+  clasesResumen: ClaseResumenCard[];
 }
 
 function nivelFromScores(r: Resultado): NivelParecido {
@@ -60,9 +66,25 @@ export function buildResumenItems(
   clasesBuscadas: number[],
 ): string[] {
   const t = textosParecido(r, clasesBuscadas);
-  const items: string[] = [t.escribir, t.pronunciar];
-  if (t.clase) items.push(t.clase);
-  return items;
+  return [t.escribir, t.pronunciar];
+}
+
+export function buildClasesResumen(
+  r: Resultado,
+  clasesBuscadas: number[],
+): ClaseResumenCard[] {
+  const pedidas = new Set(clasesBuscadas);
+  return [...r.clases]
+    .sort((a, b) => {
+      const ia = pedidas.has(a) ? 0 : 1;
+      const ib = pedidas.has(b) ? 0 : 1;
+      if (ia !== ib) return ia - ib;
+      return a - b;
+    })
+    .map((clase) => ({
+      clase,
+      identica: pedidas.has(clase),
+    }));
 }
 
 export function solicitudMasReciente(
@@ -103,5 +125,6 @@ export function toResultCardDisplay(
     razonSocial: titular || undefined,
     nivelParecido: nivelFromScores(r),
     resumenItems: buildResumenItems(r, clasesBuscadas),
+    clasesResumen: buildClasesResumen(r, clasesBuscadas),
   };
 }
