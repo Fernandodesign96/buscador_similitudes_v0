@@ -111,7 +111,7 @@ export const copy = {
         ? `Hay 1 marca parecida a «${consulta}». Te recomendamos revisarla.`
         : `Hay ${total} marcas parecidas a «${consulta}». Te recomendamos revisar esas similitudes.`,
     coincidenciasRegistro:
-      "Si otra persona ya tiene una marca igual o muy parecida en la misma clase de productos o servicios, puedes cambiar el nombre antes de solicitar.",
+      "Si otra persona ya tiene una marca igual o muy parecida al escribir, pronunciar, o en la misma clase de productos o servicios, puedes cambiar el nombre u otra característica antes de solicitar.",
     coincidenciasNoDecide:
       "Esto no decide si INAPI acepta o rechaza tu solicitud. Sirve para que compares y decidas si conviene ajustar el nombre o la cobertura.",
     coincidenciasVerificaTitulo: "Revisa si se parecen en:",
@@ -147,6 +147,7 @@ export const copy = {
       sobre80: "Alguna similitud al pronunciar",
       bajo80: "Poca similitud al pronunciar",
     },
+    claseCard: (n: number): string => `Clase ${n}`,
     bulletClaseIdentica: (clases: number[]): string => {
       if (clases.length === 1) {
         return `Pertenece a la misma clase solicitada (${clases[0]})`;
