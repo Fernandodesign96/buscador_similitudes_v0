@@ -147,7 +147,15 @@ export const copy = {
       sobre80: "Alguna similitud al pronunciar",
       bajo80: "Poca similitud al pronunciar",
     },
-    claseCard: (n: number): string => `Clase ${n}`,
+    clasesRegistradas: (clases: number[]): string => {
+      if (clases.length === 0) return "";
+      if (clases.length === 1) return `Clases registradas: ${clases[0]}.`;
+      if (clases.length === 2) {
+        return `Clases registradas: ${clases[0]} y ${clases[1]}.`;
+      }
+      const resto = clases.slice(0, -1).join(", ");
+      return `Clases registradas: ${resto} y ${clases[clases.length - 1]}.`;
+    },
     bulletClaseIdentica: (clases: number[]): string => {
       if (clases.length === 1) {
         return `Pertenece a la misma clase solicitada (${clases[0]})`;

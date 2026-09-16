@@ -56,6 +56,11 @@ export function ExpandableResultCard({
               {copy.detail.solicitud}: {solicitud}
             </p>
           ) : null}
+          {marca.clasesRegistradas.length > 0 ? (
+            <p className="text-sm text-inapi-muted">
+              {copy.results.clasesRegistradas(marca.clasesRegistradas)}
+            </p>
+          ) : null}
         </div>
 
         <div
@@ -67,16 +72,11 @@ export function ExpandableResultCard({
           {marca.resumenItems.map((item) => (
             <li key={item}>{item}</li>
           ))}
-          {marca.clasesResumen.map(({ clase, identica }) => (
-            <li
-              key={`clase-${clase}`}
-              className={identica ? "font-bold text-[#111]" : undefined}
-            >
-              {identica
-                ? copy.results.bulletClaseIdentica([clase])
-                : copy.results.claseCard(clase)}
+          {marca.clasesIdenticas.length > 0 ? (
+            <li className="font-bold text-[#111]">
+              {copy.results.bulletClaseIdentica(marca.clasesIdenticas)}
             </li>
-          ))}
+          ) : null}
         </ul>
 
         <div className="flex shrink-0 flex-col items-stretch sm:ml-4 sm:w-[11.75rem]">

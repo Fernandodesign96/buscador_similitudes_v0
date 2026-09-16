@@ -4,16 +4,12 @@ import { SIMILITUD_MIN_RESULTADOS } from "@/lib/similarity";
 
 export type NivelParecido = "muy" | "algo" | "poco";
 
-export interface ClaseResumenCard {
-  clase: number;
-  identica: boolean;
-}
-
 export interface ResultCardDisplay extends Resultado {
   razonSocial?: string;
   nivelParecido: NivelParecido;
   resumenItems: string[];
-  clasesResumen: ClaseResumenCard[];
+  clasesRegistradas: number[];
+  clasesIdenticas: number[];
 }
 
 function nivelFromScores(r: Resultado): NivelParecido {
@@ -43,7 +39,9 @@ function bandaFromPct(value: number): BandaSimilitud {
 
 function clasesIdenticas(clasesBuscadas: number[], r: Resultado): number[] {
   if (clasesBuscadas.length === 0) return [];
-  return r.clases.filter((c) => clasesBuscadas.includes(c));
+  return r.clases
+    .filter((c) => clasesBuscadas.includes(c))
+    .sort((a, b) => a - b);
 }
 
 export function textosParecido(
@@ -67,24 +65,6 @@ export function buildResumenItems(
 ): string[] {
   const t = textosParecido(r, clasesBuscadas);
   return [t.escribir, t.pronunciar];
-}
-
-export function buildClasesResumen(
-  r: Resultado,
-  clasesBuscadas: number[],
-): ClaseResumenCard[] {
-  const pedidas = new Set(clasesBuscadas);
-  return [...r.clases]
-    .sort((a, b) => {
-      const ia = pedidas.has(a) ? 0 : 1;
-      const ib = pedidas.has(b) ? 0 : 1;
-      if (ia !== ib) return ia - ib;
-      return a - b;
-    })
-    .map((clase) => ({
-      clase,
-      identica: pedidas.has(clase),
-    }));
 }
 
 export function solicitudMasReciente(
@@ -125,6 +105,7 @@ export function toResultCardDisplay(
     razonSocial: titular || undefined,
     nivelParecido: nivelFromScores(r),
     resumenItems: buildResumenItems(r, clasesBuscadas),
-    clasesResumen: buildClasesResumen(r, clasesBuscadas),
+    clasesRegistradas: [...r.clases].sort((a, b) => a - b),
+    clasesIdenticas: clasesIdenticas(clasesBuscadas, r),
   };
 }
